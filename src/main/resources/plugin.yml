@@ -1,0 +1,19 @@
+name: PremiumUUID
+version: "${version}"
+main: com.coto.premiumuuid.PremiumUUIDPlugin
+api-version: "1.21"
+description: Resolves premium UUIDs for players on offline-mode servers.
+authors:
+  - Coto
+
+commands:
+  premiumuuid:
+    description: PremiumUUID admin commands.
+    usage: /<command> <reload|lookup|clearcache> [player]
+    aliases:
+      - puuid
+
+permissions:
+  premiumuuid.admin:
+    description: Allows use of PremiumUUID admin commands.
+    default: op

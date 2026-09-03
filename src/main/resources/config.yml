@@ -1,0 +1,14 @@
+premium-uuid-enabled: true
+
+mojang-api:
+  timeout-ms: 3000
+
+cache:
+  file: "uuid-cache.yml"
+  ttl-minutes: 1440
+
+fallback:
+  log-warning: true
+
+logging:
+  level: "INFO"   # INFO | DEBUG
