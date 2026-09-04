@@ -3,6 +3,7 @@ package com.coto.premiumuuid.command;
 import com.coto.premiumuuid.cache.UUIDCache;
 import com.coto.premiumuuid.cache.UUIDCache.CacheEntry;
 import com.coto.premiumuuid.config.PluginConfig;
+import com.coto.premiumuuid.override.OverrideStore;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -21,7 +22,7 @@ import java.util.List;
 
 /**
  * Handles {@code /premiumuuid} (alias {@code /puuid}) with subcommands:
- * reload, lookup, clearcache.
+ * reload, lookup, clearcache, active, inactive.
  */
 public final class PremiumUUIDCommand implements TabExecutor {
 
@@ -30,10 +31,12 @@ public final class PremiumUUIDCommand implements TabExecutor {
 
     private final PluginConfig config;
     private final UUIDCache cache;
+    private final OverrideStore overrides;
 
-    public PremiumUUIDCommand(PluginConfig config, UUIDCache cache) {
+    public PremiumUUIDCommand(PluginConfig config, UUIDCache cache, OverrideStore overrides) {
         this.config = config;
         this.cache = cache;
+        this.overrides = overrides;
     }
 
     @Override
@@ -45,9 +48,11 @@ public final class PremiumUUIDCommand implements TabExecutor {
         }
 
         return switch (args[0].toLowerCase()) {
-            case "reload" -> handleReload(sender);
-            case "lookup" -> handleLookup(sender, args, label);
+            case "reload"     -> handleReload(sender);
+            case "lookup"     -> handleLookup(sender, args, label);
             case "clearcache" -> handleClearCache(sender, args);
+            case "active"     -> handleOverride(sender, args, label, true);
+            case "inactive"   -> handleOverride(sender, args, label, false);
             default -> {
                 sendUsage(sender, label);
                 yield true;
@@ -55,7 +60,7 @@ public final class PremiumUUIDCommand implements TabExecutor {
         };
     }
 
-    // ── Subcommands ─────────────────────────────────────────────────────
+    // -- Subcommands ---------------------------------------------------------
 
     private boolean handleReload(CommandSender sender) {
         config.reload();
@@ -95,6 +100,13 @@ public final class PremiumUUIDCommand implements TabExecutor {
                 .append(Component.text(String.valueOf(expired),
                         expired ? NamedTextColor.RED : NamedTextColor.GREEN)));
 
+        Boolean ov = overrides.get(target);
+        String ovValue = ov == null ? "none" : (ov ? "active" : "inactive");
+        NamedTextColor ovColor = ov == null ? NamedTextColor.DARK_GRAY
+                : (ov ? NamedTextColor.GREEN : NamedTextColor.RED);
+        sender.sendMessage(Component.text("  Override: ", NamedTextColor.GRAY)
+                .append(Component.text(ovValue, ovColor)));
+
         return true;
     }
 
@@ -115,28 +127,56 @@ public final class PremiumUUIDCommand implements TabExecutor {
         return true;
     }
 
-    // ── Tab completion ──────────────────────────────────────────────────
+    private boolean handleOverride(CommandSender sender, String[] args, String label, boolean active) {
+        if (args.length < 2) {
+            String sub = active ? "active" : "inactive";
+            sender.sendMessage(Component.text("Usage: /" + label + " " + sub + " <player>", NamedTextColor.RED));
+            return true;
+        }
+
+        String nick = args[1].toLowerCase();
+        overrides.set(nick, active);
+
+        String state = active ? "active" : "inactive";
+        sender.sendMessage(Component.text("Override for '" + nick + "' set to " + state + ".",
+                active ? NamedTextColor.GREEN : NamedTextColor.RED));
+        return true;
+    }
+
+    // -- Tab completion ------------------------------------------------------
 
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command,
                                                 @NotNull String label, @NotNull String[] args) {
         if (args.length == 1) {
-            return filterStartsWith(List.of("reload", "lookup", "clearcache"), args[0]);
+            return filterStartsWith(List.of("reload", "lookup", "clearcache", "active", "inactive"), args[0]);
         }
-        if (args.length == 2 && ("lookup".equalsIgnoreCase(args[0]) || "clearcache".equalsIgnoreCase(args[0]))) {
-            List<String> cached = new ArrayList<>();
-            for (var entry : cache.entrySet()) {
-                cached.add(entry.getKey());
+        if (args.length == 2) {
+            String sub = args[0].toLowerCase();
+            if ("lookup".equals(sub) || "clearcache".equals(sub)) {
+                List<String> cached = new ArrayList<>();
+                for (var entry : cache.entrySet()) {
+                    cached.add(entry.getKey());
+                }
+                return filterStartsWith(cached, args[1]);
             }
-            return filterStartsWith(cached, args[1]);
+            if ("active".equals(sub) || "inactive".equals(sub)) {
+                List<String> nicks = new ArrayList<>();
+                for (var entry : overrides.entrySet()) {
+                    nicks.add(entry.getKey());
+                }
+                return filterStartsWith(nicks, args[1]);
+            }
         }
         return List.of();
     }
 
-    // ── Helpers ─────────────────────────────────────────────────────────
+    // -- Helpers -------------------------------------------------------------
 
     private void sendUsage(CommandSender sender, String label) {
-        sender.sendMessage(Component.text("Usage: /" + label + " <reload|lookup|clearcache> [player]", NamedTextColor.YELLOW));
+        sender.sendMessage(Component.text(
+                "Usage: /" + label + " <reload | lookup | clearcache | active | inactive> [player]",
+                NamedTextColor.YELLOW));
     }
 
     private static List<String> filterStartsWith(List<String> options, String prefix) {

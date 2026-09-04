@@ -6,6 +6,7 @@ import com.coto.premiumuuid.config.PluginConfig;
 import com.coto.premiumuuid.mojang.MojangApiClient;
 import com.coto.premiumuuid.mojang.MojangApiClient.Failure;
 import com.coto.premiumuuid.mojang.MojangApiClient.Success;
+import com.coto.premiumuuid.override.OverrideStore;
 
 import com.destroystokyo.paper.profile.PlayerProfile;
 import org.bukkit.Bukkit;
@@ -26,21 +27,42 @@ public final class PreLoginListener implements Listener {
     private final PluginConfig config;
     private final UUIDCache cache;
     private final MojangApiClient mojangApi;
+    private final OverrideStore overrides;
     private final Logger logger;
 
-    public PreLoginListener(PluginConfig config, UUIDCache cache, MojangApiClient mojangApi, Logger logger) {
+    public PreLoginListener(PluginConfig config, UUIDCache cache, MojangApiClient mojangApi,
+                            OverrideStore overrides, Logger logger) {
         this.config = config;
         this.cache = cache;
         this.mojangApi = mojangApi;
+        this.overrides = overrides;
         this.logger = logger;
     }
 
     @EventHandler(priority = EventPriority.LOWEST)
     public void onPreLogin(AsyncPlayerPreLoginEvent event) {
-        if (!config.isEnabled()) return;
-
         String username = event.getName();
         String key = username.toLowerCase();
+
+        // 0) Precedência de override individual
+        Boolean override = overrides.get(key);
+        if (override != null) {
+            if (!override) {
+                // inactive — força UUID offline, sem consultar cache nem API
+                if (config.isDebugLogging()) {
+                    UUID offlineUuid = MojangApiClient.computeOfflineUUID(username);
+                    logger.info("[DEBUG] Player '" + username + "' tem override INACTIVE → offline UUID " + offlineUuid);
+                }
+                return; // não faz nada: o servidor usa UUID offline por padrão
+            }
+            // active — cai para o fluxo premium (cache → API → fallback) abaixo
+            if (config.isDebugLogging()) {
+                logger.info("[DEBUG] Player '" + username + "' tem override ACTIVE → checagem premium forçada.");
+            }
+        } else {
+            // Sem override — segue o comportamento global
+            if (!config.isEnabled()) return;
+        }
 
         // 1) Check cache
         CacheEntry cached = cache.get(key);
