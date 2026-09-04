@@ -7,11 +7,12 @@
 
 
 A lightweight Paper plugin that resolves premium (Mojang) UUIDs on `online-mode=false` servers by checking player nicknames against the Mojang API.
+
 ## Quick Start
 
 ```bash
 # 1. Download the latest release
-curl -LO https://github.com/rouri404/premium-uuid/releases/latest/download/PremiumUUID-1.0.0.jar
+curl -LO https://github.com/rouri404/premium-uuid/releases/latest/download/PremiumUUID-1.0.1.jar
 
 # 2. Move it to your server's plugins folder
 mv PremiumUUID-*.jar /path/to/server/plugins/
@@ -32,8 +33,9 @@ On offline-mode servers, every player receives an offline UUID, which breaks acc
 
 - **Automatic UUID resolution** via `AsyncPlayerPreLoginEvent` (lowest priority)
 - **Persistent disk cache** (`uuid-cache.yml`) with configurable TTL
+- **Per-nickname override** (`overrides.yml`) — force premium check on or off for any nick, regardless of the global toggle
 - **Graceful fallback** — API failures never block login; stale cache or offline UUID is used instead
-- **Admin commands** — reload config, lookup cache entries, clear cache
+- **Admin commands** — reload config, lookup cache/override state, clear cache, set overrides
 - **Zero overhead** when disabled via config
 
 ## Configuration
@@ -68,22 +70,46 @@ logging:
 
 ## Commands
 
-Base command: `/premiumuuid` (alias: `/puuid`)
+Base command: `/premiumuuid` (alias: `/puuid`)  
 Permission: `premiumuuid.admin` (default: op)
 
 | Command | Description |
 |---------|-------------|
-| `/premiumuuid reload` | Reloads `config.yml` without restarting (useful to hot-swap `DEBUG` mode, timeouts, or disable the plugin) |
-| `/premiumuuid lookup <player>` | Shows the cached state for a player |
-| `/premiumuuid clearcache [player]` | Clears the entire cache, or a single entry |
+| `/premiumuuid reload` | Reloads `config.yml` without restarting |
+| `/premiumuuid lookup <nick>` | Shows the cached state and individual override for a player |
+| `/premiumuuid clearcache [nick]` | Clears the entire UUID cache, or a single entry |
+| `/premiumuuid active <nick>` | Forces premium check **on** for that nick, even if `premium-uuid-enabled: false` |
+| `/premiumuuid inactive <nick>` | Forces premium check **off** for that nick, even if `premium-uuid-enabled: true` — always logs in with offline UUID, no cache or API call |
+
+### Per-Nickname Overrides
+
+Overrides are stored in `plugins/PremiumUUID/overrides.yml` and survive server restarts:
+
+```yaml
+overrides:
+  steve: true    # always runs premium check
+  alex: false    # always uses offline UUID
+```
+
+- Nick is normalised to **lowercase** before storing.
+- Commands are **idempotent** — calling `active` on an already-active nick just confirms the state.
+- No requirement for the player to have joined before (pre-configuration is supported).
+
+**Precedence at login:**
+
+1. Individual override (`overrides.yml`) — takes priority over everything.
+2. Global `premium-uuid-enabled` — applies only when no override is set.
 
 ## How It Works
 
 ```mermaid
 flowchart TD
-    A["Player joins server"] --> B{"premium-uuid-enabled?"}
-    B -- "false" --> C["Do nothing\n(default offline UUID)"]
-    B -- "true" --> D{"Valid cache\nentry?"}
+    A["Player joins server"] --> OV{"Override set\nfor this nick?"}
+    OV -- "inactive (false)" --> C["Do nothing\n(offline UUID)"]
+    OV -- "active (true)" --> D{"Valid cache\nentry?"}
+    OV -- "no override" --> B{"premium-uuid-enabled?"}
+    B -- "false" --> C
+    B -- "true" --> D
     D -- "yes" --> E{"Cached as\npremium?"}
     E -- "yes" --> F["Set real Mojang UUID\nvia PlayerProfile"]
     E -- "no" --> G["Keep offline UUID"]
@@ -109,9 +135,9 @@ flowchart TD
 
 ```bash
 # Requires Java 21+
-./gradlew build
+./gradlew jar
 
-# Output: build/libs/PremiumUUID-1.0.0.jar
+# Output: build/libs/PremiumUUID-1.0.1.jar
 ```
 
 ## Contributing

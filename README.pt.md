@@ -6,11 +6,12 @@
 [![License](https://img.shields.io/github/license/rouri404/premium-uuid?style=plastic)](LICENSE) *[Read in English](README.md)*
 
 Um plugin leve para Paper que resolve UUIDs premium (Mojang) em servidores `online-mode=false`, checando nicknames de jogadores na API da Mojang.
+
 ## Início Rápido
 
 ```bash
 # 1. Baixe a última release
-curl -LO https://github.com/rouri404/premium-uuid/releases/latest/download/PremiumUUID-1.0.0.jar
+curl -LO https://github.com/rouri404/premium-uuid/releases/latest/download/PremiumUUID-1.0.1.jar
 
 # 2. Mova para a pasta plugins do servidor
 mv PremiumUUID-*.jar /caminho/para/servidor/plugins/
@@ -31,8 +32,9 @@ Em servidores offline-mode, todo jogador recebe um UUID offline, o que quebra a 
 
 - **Resolução automática de UUID** via `AsyncPlayerPreLoginEvent` (prioridade mais baixa)
 - **Cache persistente em disco** (`uuid-cache.yml`) com TTL configurável
+- **Override individual por nick** (`overrides.yml`) — force a checagem premium ligada ou desligada para qualquer nick, independente do toggle global
 - **Fallback gracioso** — falhas na API nunca bloqueiam o login; cache expirado ou UUID offline é usado
-- **Comandos administrativos** — recarregar config, consultar cache, limpar cache
+- **Comandos administrativos** — recarregar config, consultar cache e override, limpar cache, definir overrides
 - **Zero overhead** quando desabilitado via config
 
 ## Configuração
@@ -67,22 +69,46 @@ logging:
 
 ## Comandos
 
-Comando base: `/premiumuuid` (alias: `/puuid`)
+Comando base: `/premiumuuid` (alias: `/puuid`)  
 Permissão: `premiumuuid.admin` (padrão: op)
 
 | Comando | Descrição |
 |---------|-----------|
-| `/premiumuuid reload` | Recarrega `config.yml` sem reiniciar (útil para ativar modo `DEBUG`, mudar timeouts ou desativar o plugin ao vivo) |
-| `/premiumuuid lookup <player>` | Mostra o estado do cache para um jogador |
-| `/premiumuuid clearcache [player]` | Limpa o cache inteiro, ou de um jogador específico |
+| `/premiumuuid reload` | Recarrega `config.yml` sem reiniciar |
+| `/premiumuuid lookup <nick>` | Mostra o estado do cache e o override individual de um jogador |
+| `/premiumuuid clearcache [nick]` | Limpa o cache inteiro, ou de um nick específico |
+| `/premiumuuid active <nick>` | Força a checagem premium **ligada** para esse nick, mesmo com `premium-uuid-enabled: false` |
+| `/premiumuuid inactive <nick>` | Força a checagem premium **desligada** para esse nick, mesmo com `premium-uuid-enabled: true` — sempre entra com UUID offline, sem cache nem API |
+
+### Overrides Individuais por Nick
+
+Os overrides ficam em `plugins/PremiumUUID/overrides.yml` e sobrevivem a restarts:
+
+```yaml
+overrides:
+  steve: true    # sempre roda a checagem premium
+  alex: false    # sempre usa UUID offline
+```
+
+- O nick é normalizado para **minúsculas** antes de gravar.
+- Os comandos são **idempotentes** — chamar `active` num nick já ativo apenas confirma o estado.
+- Não exige que o jogador já tenha entrado no servidor (pré-configuração é suportada).
+
+**Precedência no login:**
+
+1. Override individual (`overrides.yml`) — tem prioridade sobre tudo.
+2. `premium-uuid-enabled` global — aplica somente quando não há override configurado.
 
 ## Como Funciona
 
 ```mermaid
 flowchart TD
-    A["Jogador entra no servidor"] --> B{"premium-uuid-enabled?"}
-    B -- "false" --> C["Não faz nada\n(UUID offline padrão)"]
-    B -- "true" --> D{"Entrada válida\nno cache?"}
+    A["Jogador entra no servidor"] --> OV{"Override configurado\npara esse nick?"}
+    OV -- "inactive (false)" --> C["Não faz nada\n(UUID offline padrão)"]
+    OV -- "active (true)" --> D{"Entrada válida\nno cache?"}
+    OV -- "sem override" --> B{"premium-uuid-enabled?"}
+    B -- "false" --> C
+    B -- "true" --> D
     D -- "sim" --> E{"Cacheado como\npremium?"}
     E -- "sim" --> F["Define UUID real da Mojang\nvia PlayerProfile"]
     E -- "não" --> G["Mantém UUID offline"]
@@ -108,9 +134,9 @@ flowchart TD
 
 ```bash
 # Requer Java 21+
-./gradlew build
+./gradlew jar
 
-# Saída: build/libs/PremiumUUID-1.0.0.jar
+# Saída: build/libs/PremiumUUID-1.0.1.jar
 ```
 
 ## Contribuindo

@@ -5,6 +5,7 @@ import com.coto.premiumuuid.command.PremiumUUIDCommand;
 import com.coto.premiumuuid.config.PluginConfig;
 import com.coto.premiumuuid.listener.PreLoginListener;
 import com.coto.premiumuuid.mojang.MojangApiClient;
+import com.coto.premiumuuid.override.OverrideStore;
 
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -17,6 +18,7 @@ public final class PremiumUUIDPlugin extends JavaPlugin {
 
     private PluginConfig pluginConfig;
     private UUIDCache uuidCache;
+    private OverrideStore overrideStore;
     private BukkitTask saveTask;
 
     @Override
@@ -27,15 +29,18 @@ public final class PremiumUUIDPlugin extends JavaPlugin {
         // Cache
         uuidCache = new UUIDCache(getDataFolder(), pluginConfig.getCacheFile(), getLogger());
 
+        // Override store (persistent per-nick decisions)
+        overrideStore = new OverrideStore(getDataFolder(), getLogger());
+
         // Mojang API client
         MojangApiClient mojangApi = new MojangApiClient(getLogger());
 
         // Register listener
         getServer().getPluginManager().registerEvents(
-                new PreLoginListener(pluginConfig, uuidCache, mojangApi, getLogger()), this);
+                new PreLoginListener(pluginConfig, uuidCache, mojangApi, overrideStore, getLogger()), this);
 
         // Register command
-        PremiumUUIDCommand cmdHandler = new PremiumUUIDCommand(pluginConfig, uuidCache);
+        PremiumUUIDCommand cmdHandler = new PremiumUUIDCommand(pluginConfig, uuidCache, overrideStore);
         PluginCommand cmd = getCommand("premiumuuid");
         if (cmd != null) {
             cmd.setExecutor(cmdHandler);
