@@ -11,7 +11,7 @@ Um plugin leve para Paper que resolve UUIDs premium (Mojang) em servidores `onli
 
 ```bash
 # 1. Baixe a última release
-curl -LO https://github.com/rouri404/premium-uuid/releases/latest/download/PremiumUUID-1.1.0.jar
+curl -LO https://github.com/rouri404/premium-uuid/releases/latest/download/PremiumUUID-1.1.1.jar
 
 # 2. Mova para a pasta plugins do servidor
 mv PremiumUUID-*.jar /caminho/para/servidor/plugins/
@@ -75,10 +75,10 @@ Permissão: `premiumuuid.admin` (padrão: op)
 | Comando | Descrição |
 |---------|-----------|
 | `/premiumuuid reload` | Recarrega `config.yml` sem reiniciar |
-| `/premiumuuid lookup <nick>` | Mostra o estado do cache e o override individual de um jogador |
-| `/premiumuuid clearcache [nick]` | Limpa o cache inteiro, ou de um nick específico |
-| `/premiumuuid active <nick>` | Força a checagem premium **ligada** para esse nick, mesmo com `premium-uuid-enabled: false` |
-| `/premiumuuid inactive <nick>` | Força a checagem premium **desligada** para esse nick, mesmo com `premium-uuid-enabled: true` — sempre entra com UUID offline, sem cache nem API |
+| `/premiumuuid status <nick>` | Mostra o estado do cache e o override individual de um jogador |
+| `/premiumuuid clearcache [nick]` | Limpa todo o cache de UUIDs, ou uma única entrada |
+| `/premiumuuid enable <nick>` | Força a checagem premium **ligada** para esse nick, mesmo com `premium-uuid-enabled: false` |
+| `/premiumuuid disable <nick>` | Força a checagem premium **desligada** para esse nick, mesmo com `premium-uuid-enabled: true` — sempre entra com UUID offline, sem cache nem API |
 
 ### Overrides Individuais por Nick
 
@@ -91,7 +91,7 @@ overrides:
 ```
 
 - O nick é normalizado para **minúsculas** antes de gravar.
-- Os comandos são **idempotentes** — chamar `active` num nick já ativo apenas confirma o estado.
+- Os comandos são **idempotentes** — chamar `enable` num nick já habilitado apenas confirma o estado.
 - Não exige que o jogador já tenha entrado no servidor (pré-configuração é suportada).
 
 **Precedência no login:**
@@ -136,7 +136,7 @@ flowchart TD
 # Requer Java 21+
 ./gradlew jar
 
-# Saída: build/libs/PremiumUUID-1.1.0.jar
+# Saída: build/libs/PremiumUUID-1.1.1.jar
 ```
 
 ## Contribuindo
