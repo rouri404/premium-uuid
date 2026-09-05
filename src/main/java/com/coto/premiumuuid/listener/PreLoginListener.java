@@ -129,5 +129,52 @@ public final class PreLoginListener implements Listener {
         PlayerProfile profile = Bukkit.createProfile(uuid, event.getName());
         event.setPlayerProfile(profile);
     }
-}
 
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onPlayerLogin(org.bukkit.event.player.PlayerLoginEvent event) {
+        if (event.getResult() != org.bukkit.event.player.PlayerLoginEvent.Result.KICK_WHITELIST) {
+            return;
+        }
+
+        String name = event.getPlayer().getName();
+        String key = name.toLowerCase();
+
+        // Only intervene if the plugin actually swapped this player's UUID.
+        // That happens when: (a) override is ACTIVE, or (b) no override and global is enabled.
+        Boolean override = overrides.get(key);
+        boolean pluginIsActive;
+        if (override != null) {
+            pluginIsActive = override; // true = active, false = inactive (no swap)
+        } else {
+            pluginIsActive = config.isEnabled();
+        }
+
+        if (!pluginIsActive) {
+            return; // Plugin didn't touch this player's UUID — don't interfere with the whitelist
+        }
+
+        // Check if they are whitelisted by their offline UUID
+        UUID offlineUuid = MojangApiClient.computeOfflineUUID(name);
+        org.bukkit.OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(offlineUuid);
+
+        if (offlinePlayer.isWhitelisted()) {
+            event.allow();
+            if (config.isDebugLogging()) {
+                logger.info("[DEBUG] Allowed whitelisted player '" + name + "' (matched by offline UUID).");
+            }
+            return;
+        }
+
+        // Fallback: Check if they are whitelisted by name
+        for (org.bukkit.OfflinePlayer wp : Bukkit.getWhitelistedPlayers()) {
+            String wpName = wp.getName();
+            if (wpName != null && wpName.equalsIgnoreCase(name)) {
+                event.allow();
+                if (config.isDebugLogging()) {
+                    logger.info("[DEBUG] Allowed whitelisted player '" + name + "' (matched by name).");
+                }
+                return;
+            }
+        }
+    }
+}
