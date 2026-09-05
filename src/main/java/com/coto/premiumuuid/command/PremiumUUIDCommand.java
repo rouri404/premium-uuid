@@ -49,10 +49,10 @@ public final class PremiumUUIDCommand implements TabExecutor {
 
         return switch (args[0].toLowerCase()) {
             case "reload"     -> handleReload(sender);
-            case "lookup"     -> handleLookup(sender, args, label);
+            case "status"     -> handleStatus(sender, args, label);
             case "clearcache" -> handleClearCache(sender, args);
-            case "active"     -> handleOverride(sender, args, label, true);
-            case "inactive"   -> handleOverride(sender, args, label, false);
+            case "enable"     -> handleOverride(sender, args, label, true);
+            case "disable"    -> handleOverride(sender, args, label, false);
             default -> {
                 sendUsage(sender, label);
                 yield true;
@@ -68,9 +68,9 @@ public final class PremiumUUIDCommand implements TabExecutor {
         return true;
     }
 
-    private boolean handleLookup(CommandSender sender, String[] args, String label) {
+    private boolean handleStatus(CommandSender sender, String[] args, String label) {
         if (args.length < 2) {
-            sender.sendMessage(Component.text("Usage: /" + label + " lookup <player>", NamedTextColor.RED));
+            sender.sendMessage(Component.text("Usage: /" + label + " status <player>", NamedTextColor.RED));
             return true;
         }
 
@@ -129,7 +129,7 @@ public final class PremiumUUIDCommand implements TabExecutor {
 
     private boolean handleOverride(CommandSender sender, String[] args, String label, boolean active) {
         if (args.length < 2) {
-            String sub = active ? "active" : "inactive";
+            String sub = active ? "enable" : "disable";
             sender.sendMessage(Component.text("Usage: /" + label + " " + sub + " <player>", NamedTextColor.RED));
             return true;
         }
@@ -137,7 +137,7 @@ public final class PremiumUUIDCommand implements TabExecutor {
         String nick = args[1].toLowerCase();
         overrides.set(nick, active);
 
-        String state = active ? "active" : "inactive";
+        String state = active ? "enabled" : "disabled";
         sender.sendMessage(Component.text("Override for '" + nick + "' set to " + state + ".",
                 active ? NamedTextColor.GREEN : NamedTextColor.RED));
         return true;
@@ -149,18 +149,18 @@ public final class PremiumUUIDCommand implements TabExecutor {
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command,
                                                 @NotNull String label, @NotNull String[] args) {
         if (args.length == 1) {
-            return filterStartsWith(List.of("reload", "lookup", "clearcache", "active", "inactive"), args[0]);
+            return filterStartsWith(List.of("reload", "status", "clearcache", "enable", "disable"), args[0]);
         }
         if (args.length == 2) {
             String sub = args[0].toLowerCase();
-            if ("lookup".equals(sub) || "clearcache".equals(sub)) {
+            if ("status".equals(sub) || "clearcache".equals(sub)) {
                 List<String> cached = new ArrayList<>();
                 for (var entry : cache.entrySet()) {
                     cached.add(entry.getKey());
                 }
                 return filterStartsWith(cached, args[1]);
             }
-            if ("active".equals(sub) || "inactive".equals(sub)) {
+            if ("enable".equals(sub) || "disable".equals(sub)) {
                 List<String> nicks = new ArrayList<>();
                 for (var entry : overrides.entrySet()) {
                     nicks.add(entry.getKey());
@@ -175,7 +175,7 @@ public final class PremiumUUIDCommand implements TabExecutor {
 
     private void sendUsage(CommandSender sender, String label) {
         sender.sendMessage(Component.text(
-                "Usage: /" + label + " <reload | lookup | clearcache | active | inactive> [player]",
+                "Usage: /" + label + " <reload | status | clearcache | enable | disable> [player]",
                 NamedTextColor.YELLOW));
     }
 
