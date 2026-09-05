@@ -12,7 +12,7 @@ A lightweight Paper plugin that resolves premium (Mojang) UUIDs on `online-mode=
 
 ```bash
 # 1. Download the latest release
-curl -Lo https://github.com/rouri404/premium-uuid/releases/latest/download/PremiumUUID-1.1.0.jar
+curl -Lo https://github.com/rouri404/premium-uuid/releases/latest/download/PremiumUUID-1.1.1.jar
 
 # 2. Move it to your server's plugins folder
 mv PremiumUUID-*.jar /path/to/server/plugins/
@@ -35,7 +35,7 @@ On offline-mode servers, every player receives an offline UUID, which breaks acc
 - **Persistent disk cache** (`uuid-cache.yml`) with configurable TTL
 - **Per-nickname override** (`overrides.yml`) — force premium check on or off for any nick, regardless of the global toggle
 - **Graceful fallback** — API failures never block login; stale cache or offline UUID is used instead
-- **Admin commands** — reload config, lookup cache/override state, clear cache, set overrides
+- **Admin commands** — reload config, check player status, clear cache, set overrides
 - **Zero overhead** when disabled via config
 
 ## Configuration
@@ -76,10 +76,10 @@ Permission: `premiumuuid.admin` (default: op)
 | Command | Description |
 |---------|-------------|
 | `/premiumuuid reload` | Reloads `config.yml` without restarting |
-| `/premiumuuid lookup <nick>` | Shows the cached state and individual override for a player |
+| `/premiumuuid status <nick>` | Shows the cached state and individual override for a player |
 | `/premiumuuid clearcache [nick]` | Clears the entire UUID cache, or a single entry |
-| `/premiumuuid active <nick>` | Forces premium check **on** for that nick, even if `premium-uuid-enabled: false` |
-| `/premiumuuid inactive <nick>` | Forces premium check **off** for that nick, even if `premium-uuid-enabled: true` — always logs in with offline UUID, no cache or API call |
+| `/premiumuuid enable <nick>` | Forces premium check **on** for that nick, even if `premium-uuid-enabled: false` |
+| `/premiumuuid disable <nick>` | Forces premium check **off** for that nick, even if `premium-uuid-enabled: true` — always logs in with offline UUID, no cache or API call |
 
 ### Per-Nickname Overrides
 
@@ -92,7 +92,7 @@ overrides:
 ```
 
 - Nick is normalised to **lowercase** before storing.
-- Commands are **idempotent** — calling `active` on an already-active nick just confirms the state.
+- Commands are **idempotent** — calling `enable` on an already-enabled nick just confirms the state.
 - No requirement for the player to have joined before (pre-configuration is supported).
 
 **Precedence at login:**
@@ -137,7 +137,7 @@ flowchart TD
 # Requires Java 21+
 ./gradlew jar
 
-# Output: build/libs/PremiumUUID-1.1.0.jar
+# Output: build/libs/PremiumUUID-1.1.1.jar
 ```
 
 ## Contributing
