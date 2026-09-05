@@ -139,25 +139,13 @@ public final class PreLoginListener implements Listener {
         String name = event.getPlayer().getName();
         String key = name.toLowerCase();
 
-        // Only intervene if the plugin actually swapped this player's UUID.
-        // That happens when: (a) override is ACTIVE, or (b) no override and global is enabled.
-        Boolean override = overrides.get(key);
-        boolean pluginIsActive;
-        if (override != null) {
-            pluginIsActive = override; // true = active, false = inactive (no swap)
-        } else {
-            pluginIsActive = config.isEnabled();
-        }
+        // The plugin may have swapped this player's UUID in a previous or current session,
+        // causing a mismatch between the UUID the server is using and the one stored in whitelist.json.
+        // We check both the offline UUID and the cached premium UUID against the whitelist.
 
-        if (!pluginIsActive) {
-            return; // Plugin didn't touch this player's UUID — don't interfere with the whitelist
-        }
-
-        // Check if they are whitelisted by their offline UUID
+        // 1) Check offline UUID
         UUID offlineUuid = MojangApiClient.computeOfflineUUID(name);
-        org.bukkit.OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(offlineUuid);
-
-        if (offlinePlayer.isWhitelisted()) {
+        if (Bukkit.getOfflinePlayer(offlineUuid).isWhitelisted()) {
             event.allow();
             if (config.isDebugLogging()) {
                 logger.info("[DEBUG] Allowed whitelisted player '" + name + "' (matched by offline UUID).");
@@ -165,7 +153,19 @@ public final class PreLoginListener implements Listener {
             return;
         }
 
-        // Fallback: Check if they are whitelisted by name
+        // 2) Check premium UUID from cache
+        CacheEntry cached = cache.get(key);
+        if (cached != null && cached.premium()) {
+            if (Bukkit.getOfflinePlayer(cached.uuid()).isWhitelisted()) {
+                event.allow();
+                if (config.isDebugLogging()) {
+                    logger.info("[DEBUG] Allowed whitelisted player '" + name + "' (matched by cached premium UUID).");
+                }
+                return;
+            }
+        }
+
+        // 3) Fallback: check by name
         for (org.bukkit.OfflinePlayer wp : Bukkit.getWhitelistedPlayers()) {
             String wpName = wp.getName();
             if (wpName != null && wpName.equalsIgnoreCase(name)) {
