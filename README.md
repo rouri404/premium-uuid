@@ -12,7 +12,7 @@ A lightweight Paper plugin that resolves premium (Mojang) UUIDs on `online-mode=
 
 ```bash
 # 1. Download the latest release
-curl -Lo https://github.com/rouri404/premium-uuid/releases/latest/download/PremiumUUID-1.1.1.jar
+curl -Lo https://github.com/rouri404/premium-uuid/releases/latest/download/PremiumUUID-1.2.1.jar
 
 # 2. Move it to your server's plugins folder
 mv PremiumUUID-*.jar /path/to/server/plugins/
@@ -137,7 +137,7 @@ flowchart TD
 # Requires Java 21+
 ./gradlew jar
 
-# Output: build/libs/PremiumUUID-1.1.1.jar
+# Output: build/libs/PremiumUUID-1.2.1.jar
 ```
 
 ## Contributing
