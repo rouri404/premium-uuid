@@ -11,7 +11,7 @@ Um plugin leve para Paper que resolve UUIDs premium (Mojang) em servidores `onli
 
 ```bash
 # 1. Baixe a última release
-curl -LO https://github.com/rouri404/premium-uuid/releases/latest/download/PremiumUUID-1.2.1.jar
+curl -LO https://github.com/rouri404/premium-uuid/releases/latest/download/PremiumUUID-1.2.0.jar
 
 # 2. Mova para a pasta plugins do servidor
 mv PremiumUUID-*.jar /caminho/para/servidor/plugins/
@@ -136,7 +136,7 @@ flowchart TD
 # Requer Java 21+
 ./gradlew jar
 
-# Saída: build/libs/PremiumUUID-1.2.1.jar
+# Saída: build/libs/PremiumUUID-1.2.0.jar
 ```
 
 ## Contribuindo
@@ -145,4 +145,11 @@ Veja [CONTRIBUTING.md](CONTRIBUTING.md) para diretrizes (em inglês).
 
 ## Licença
 
-Este projeto é licenciado sob a [GNU General Public License v3.0](LICENSE).
+Copyright (C) 2026 Gabriel Couto
+
+Este programa é um software livre: você pode redistribuí-lo e/ou modificá-lo 
+sob os termos da GNU General Public License conforme publicado pela 
+Free Software Foundation, seja a versão 3 da Licença, ou (a seu critério) 
+qualquer versão posterior.
+
+Veja o arquivo [LICENSE](LICENSE) para mais detalhes.

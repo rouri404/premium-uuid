@@ -12,7 +12,7 @@ A lightweight Paper plugin that resolves premium (Mojang) UUIDs on `online-mode=
 
 ```bash
 # 1. Download the latest release
-curl -Lo https://github.com/rouri404/premium-uuid/releases/latest/download/PremiumUUID-1.2.1.jar
+curl -Lo https://github.com/rouri404/premium-uuid/releases/latest/download/PremiumUUID-1.2.0.jar
 
 # 2. Move it to your server's plugins folder
 mv PremiumUUID-*.jar /path/to/server/plugins/
@@ -137,7 +137,7 @@ flowchart TD
 # Requires Java 21+
 ./gradlew jar
 
-# Output: build/libs/PremiumUUID-1.2.1.jar
+# Output: build/libs/PremiumUUID-1.2.0.jar
 ```
 
 ## Contributing
@@ -146,4 +146,11 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 
-This project is licensed under the [GNU General Public License v3.0](LICENSE).
+Copyright (C) 2026 Gabriel Couto
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+See the [LICENSE](LICENSE) file for more details.

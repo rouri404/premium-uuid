@@ -1,0 +1,12 @@
+{
+  "name": "premium-uuid-e2e",
+  "version": "1.0.0",
+  "description": "E2E tests for PremiumUUID",
+  "main": "test.js",
+  "scripts": {
+    "test": "node test.js"
+  },
+  "dependencies": {
+    "mineflayer": "^4.39.0"
+  }
+}
