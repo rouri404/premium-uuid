@@ -13,10 +13,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Thread-safe, disk-persistent UUID cache backed by a YAML file.
- * <p>
- * All in-memory operations use a {@link ConcurrentHashMap} so they are safe
- * to call from the async event handler threads.
+ * Thread-safe cache accessed concurrently by async logins and main thread commands.
  */
 public final class UUIDCache {
 
@@ -30,47 +27,34 @@ public final class UUIDCache {
         load();
     }
 
-    // ── Data class ──────────────────────────────────────────────────────
-
     public record CacheEntry(UUID uuid, boolean premium, long lastChecked) {}
 
-    // ── Public API ──────────────────────────────────────────────────────
-
-    /** Returns the cached entry for the given lowercase username, or null. */
     public CacheEntry get(String usernameLower) {
         return entries.get(usernameLower);
     }
 
-    /** Stores an entry and schedules a save. */
     public void put(String usernameLower, CacheEntry entry) {
         entries.put(usernameLower, entry);
     }
 
-    /** Removes a single entry. Returns true if something was removed. */
     public boolean remove(String usernameLower) {
         return entries.remove(usernameLower) != null;
     }
 
-    /** Clears the entire cache. */
     public void clear() {
         entries.clear();
     }
 
-    /** Returns an unmodifiable snapshot of all entries (for iteration). */
     public Set<Map.Entry<String, CacheEntry>> entrySet() {
         return entries.entrySet();
     }
 
-    /** Checks if a cache entry is within the given TTL. */
     public boolean isValid(CacheEntry entry, long ttlMinutes) {
-        if (ttlMinutes <= 0) return true;
+        if (ttlMinutes <= 0) return true; // 0 or negative = never expires
         long ttlMs = ttlMinutes * 60_000L;
         return (System.currentTimeMillis() - entry.lastChecked()) < ttlMs;
     }
 
-    // ── Persistence ─────────────────────────────────────────────────────
-
-    /** Loads cache from disk. Safe to call multiple times. */
     public void load() {
         entries.clear();
         if (!file.exists()) return;
@@ -95,7 +79,6 @@ public final class UUIDCache {
         logger.info("Loaded " + entries.size() + " cached UUID entries from " + file.getName());
     }
 
-    /** Saves the entire cache to disk. Must be called from a safe context (onDisable or async). */
     public synchronized void save() {
         YamlConfiguration yaml = new YamlConfiguration();
 
