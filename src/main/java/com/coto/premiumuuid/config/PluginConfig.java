@@ -3,10 +3,6 @@ package com.coto.premiumuuid.config;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 
-/**
- * Loads and exposes all values from config.yml.
- * Supports live reload via {@link #reload()}.
- */
 public final class PluginConfig {
 
     private final JavaPlugin plugin;
@@ -24,7 +20,6 @@ public final class PluginConfig {
         load();
     }
 
-    /** Reloads config.yml from disk. */
     public void reload() {
         plugin.reloadConfig();
         load();
