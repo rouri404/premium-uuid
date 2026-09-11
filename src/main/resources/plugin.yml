@@ -12,6 +12,7 @@ commands:
     usage: /<command> <reload|status|clearcache|enable|disable> [nick]
     aliases:
       - puuid
+    permission: premiumuuid.admin
 
 permissions:
   premiumuuid.admin:
