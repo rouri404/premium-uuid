@@ -11,9 +11,6 @@ import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 
-/**
- * PremiumUUID — resolves premium Mojang UUIDs on offline-mode Paper servers.
- */
 public final class PremiumUUIDPlugin extends JavaPlugin {
 
     private PluginConfig pluginConfig;
@@ -23,23 +20,17 @@ public final class PremiumUUIDPlugin extends JavaPlugin {
 
     @Override
     public void onEnable() {
-        // Config
         pluginConfig = new PluginConfig(this);
 
-        // Cache
         uuidCache = new UUIDCache(getDataFolder(), pluginConfig.getCacheFile(), getLogger());
 
-        // Override store (persistent per-nick decisions)
         overrideStore = new OverrideStore(getDataFolder(), getLogger());
 
-        // Mojang API client
         MojangApiClient mojangApi = new MojangApiClient(getLogger());
 
-        // Register listener
         getServer().getPluginManager().registerEvents(
-                new PreLoginListener(pluginConfig, uuidCache, mojangApi, overrideStore, getLogger()), this);
+                new PreLoginListener(pluginConfig, uuidCache, mojangApi, overrideStore, getLogger(), this), this);
 
-        // Register command
         PremiumUUIDCommand cmdHandler = new PremiumUUIDCommand(pluginConfig, uuidCache, overrideStore);
         PluginCommand cmd = getCommand("premiumuuid");
         if (cmd != null) {
@@ -47,13 +38,12 @@ public final class PremiumUUIDPlugin extends JavaPlugin {
             cmd.setTabCompleter(cmdHandler);
         }
 
-        // Periodic cache save every 5 minutes (6000 ticks) to minimize data loss on crash
         saveTask = getServer().getScheduler().runTaskTimerAsynchronously(this, () -> {
             uuidCache.save();
             if (pluginConfig.isDebugLogging()) {
                 getLogger().info("[DEBUG] Periodic cache save completed.");
             }
-        }, 6000L, 6000L);
+        }, 6000L, 6000L); // 5 minutes in ticks
 
         getLogger().info("PremiumUUID enabled. Premium UUID resolution is "
                 + (pluginConfig.isEnabled() ? "ACTIVE" : "DISABLED") + ".");
