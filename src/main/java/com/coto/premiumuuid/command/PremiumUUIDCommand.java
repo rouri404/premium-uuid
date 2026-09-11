@@ -20,10 +20,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Handles {@code /premiumuuid} (alias {@code /puuid}) with subcommands:
- * reload, lookup, clearcache, active, inactive.
- */
 public final class PremiumUUIDCommand implements TabExecutor {
 
     private static final DateTimeFormatter FORMATTER =
@@ -59,8 +55,6 @@ public final class PremiumUUIDCommand implements TabExecutor {
             }
         };
     }
-
-    // -- Subcommands ---------------------------------------------------------
 
     private boolean handleReload(CommandSender sender) {
         config.reload();
@@ -143,8 +137,6 @@ public final class PremiumUUIDCommand implements TabExecutor {
         return true;
     }
 
-    // -- Tab completion ------------------------------------------------------
-
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command,
                                                 @NotNull String label, @NotNull String[] args) {
@@ -170,8 +162,6 @@ public final class PremiumUUIDCommand implements TabExecutor {
         }
         return List.of();
     }
-
-    // -- Helpers -------------------------------------------------------------
 
     private void sendUsage(CommandSender sender, String label) {
         sender.sendMessage(Component.text(
