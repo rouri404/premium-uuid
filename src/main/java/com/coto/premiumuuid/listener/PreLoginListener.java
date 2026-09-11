@@ -19,8 +19,9 @@ import java.util.UUID;
 import java.util.logging.Logger;
 
 /**
- * Intercepts pre-login to resolve the player's UUID against the Mojang API
- * (cache-first) before any other plugin sees the event.
+ * Core listener handling UUID resolution in two steps:
+ * 1. AsyncPreLogin (LOWEST): Fetches Premium UUID via API/Cache asynchronously.
+ * 2. SyncLogin (HIGHEST): Intercepts Ban/Whitelist kicks to verify all possible identities.
  */
 public final class PreLoginListener implements Listener {
 
@@ -29,14 +30,16 @@ public final class PreLoginListener implements Listener {
     private final MojangApiClient mojangApi;
     private final OverrideStore overrides;
     private final Logger logger;
+    private final org.bukkit.plugin.Plugin plugin;
 
     public PreLoginListener(PluginConfig config, UUIDCache cache, MojangApiClient mojangApi,
-                            OverrideStore overrides, Logger logger) {
+                            OverrideStore overrides, Logger logger, org.bukkit.plugin.Plugin plugin) {
         this.config = config;
         this.cache = cache;
         this.mojangApi = mojangApi;
         this.overrides = overrides;
         this.logger = logger;
+        this.plugin = plugin;
     }
 
     @EventHandler(priority = EventPriority.LOWEST)
@@ -44,34 +47,28 @@ public final class PreLoginListener implements Listener {
         String username = event.getName();
         String key = username.toLowerCase();
 
-        // 0) Precedência de override individual
         Boolean override = overrides.get(key);
         if (override != null) {
-            if (!override) {
-                // inactive — força UUID offline, sem consultar cache nem API
+            if (!override) { // if inactive, keep offline UUID
                 if (config.isDebugLogging()) {
                     UUID offlineUuid = MojangApiClient.computeOfflineUUID(username);
-                    logger.info("[DEBUG] Player '" + username + "' tem override INACTIVE → offline UUID " + offlineUuid);
+                    logger.info("[DEBUG] Player '" + username + "' has INACTIVE override → offline UUID " + offlineUuid);
                 }
-                return; // não faz nada: o servidor usa UUID offline por padrão
+                return;
             }
-            // active — cai para o fluxo premium (cache → API → fallback) abaixo
             if (config.isDebugLogging()) {
-                logger.info("[DEBUG] Player '" + username + "' tem override ACTIVE → checagem premium forçada.");
+                logger.info("[DEBUG] Player '" + username + "' has ACTIVE override → forcing premium check.");
             }
         } else {
-            // Sem override — segue o comportamento global
             if (!config.isEnabled()) return;
         }
 
-        // 1) Check cache
         CacheEntry cached = cache.get(key);
         if (cached != null && cache.isValid(cached, config.getCacheTtlMinutes())) {
             applyFromCache(event, cached, username, key, "valid cache");
             return;
         }
 
-        // 2) Cache miss or expired → call Mojang API
         MojangApiClient.LookupResult result = mojangApi.lookup(username, config.getTimeoutMs(), config.isDebugLogging());
 
         if (result instanceof Success success) {
@@ -80,8 +77,6 @@ public final class PreLoginListener implements Listener {
             handleFailure(event, failure, cached, username, key);
         }
     }
-
-    // ── Handlers ────────────────────────────────────────────────────────
 
     private void handleSuccess(AsyncPlayerPreLoginEvent event, Success success, String key) {
         CacheEntry newEntry = new CacheEntry(success.uuid(), success.premium(), System.currentTimeMillis());
@@ -97,11 +92,9 @@ public final class PreLoginListener implements Listener {
     }
 
     private void handleFailure(AsyncPlayerPreLoginEvent event, Failure failure, CacheEntry cached, String username, String key) {
-        // API failed — use stale cache if available
         if (cached != null) {
             applyFromCache(event, cached, username, key, "expired cache (API failure: " + failure.reason() + ")");
         } else {
-            // No cache at all — fall back to offline UUID
             UUID offlineUuid = MojangApiClient.computeOfflineUUID(username);
             if (config.isFallbackLogWarning()) {
                 logger.warning("Mojang API check failed for '" + username + "': " + failure.reason()
@@ -122,9 +115,6 @@ public final class PreLoginListener implements Listener {
         }
     }
 
-    /**
-     * Sets the UUID on the login event using Paper's PlayerProfile API.
-     */
     private void setEventUUID(AsyncPlayerPreLoginEvent event, UUID uuid) {
         PlayerProfile profile = Bukkit.createProfile(uuid, event.getName());
         event.setPlayerProfile(profile);
@@ -132,49 +122,166 @@ public final class PreLoginListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onPlayerLogin(org.bukkit.event.player.PlayerLoginEvent event) {
-        if (event.getResult() != org.bukkit.event.player.PlayerLoginEvent.Result.KICK_WHITELIST) {
-            return;
-        }
-
         String name = event.getPlayer().getName();
-        String key = name.toLowerCase();
+        UUID currentUuid = event.getPlayer().getUniqueId();
 
-        // The plugin may have swapped this player's UUID in a previous or current session,
-        // causing a mismatch between the UUID the server is using and the one stored in whitelist.json.
-        // We check both the offline UUID and the cached premium UUID against the whitelist.
-
-        // 1) Check offline UUID
-        UUID offlineUuid = MojangApiClient.computeOfflineUUID(name);
-        if (Bukkit.getOfflinePlayer(offlineUuid).isWhitelisted()) {
-            event.allow();
-            if (config.isDebugLogging()) {
-                logger.info("[DEBUG] Allowed whitelisted player '" + name + "' (matched by offline UUID).");
+        String banMsg = getAnyIdentityBanMessage(name, currentUuid);
+        if (banMsg != null) {
+            if (event.getResult() != org.bukkit.event.player.PlayerLoginEvent.Result.KICK_BANNED) {
+                event.disallow(org.bukkit.event.player.PlayerLoginEvent.Result.KICK_BANNED, banMsg);
             }
             return;
+        } else if (event.getResult() == org.bukkit.event.player.PlayerLoginEvent.Result.KICK_BANNED) {
+            event.allow();
+            debugLog("Player '" + name + "' was kicked as banned, but no ban found for any known identity. Allowing login.");
         }
 
-        // 2) Check premium UUID from cache
-        CacheEntry cached = cache.get(key);
+        if (Bukkit.hasWhitelist()) {
+            if (!isAnyIdentityWhitelisted(name, currentUuid)) {
+                if (event.getResult() != org.bukkit.event.player.PlayerLoginEvent.Result.KICK_WHITELIST) {
+                    event.disallow(org.bukkit.event.player.PlayerLoginEvent.Result.KICK_WHITELIST, "You are not whitelisted on this server!");
+                }
+            } else if (event.getResult() == org.bukkit.event.player.PlayerLoginEvent.Result.KICK_WHITELIST) {
+                event.allow();
+                debugLog("Allowed whitelisted player '" + name + "' (matched by alternate identity).");
+            }
+        }
+    }
+
+    private String getAnyIdentityBanMessage(String name, UUID currentUuid) {
+        org.bukkit.ban.ProfileBanList banList = Bukkit.getBanList(io.papermc.paper.ban.BanListType.PROFILE);
+        String msg;
+
+        if ((msg = checkBan(banList, currentUuid, name)) != null) {
+            debugLog("Player '" + name + "' is banned by current UUID " + currentUuid);
+            return msg;
+        }
+
+        UUID offlineUuid = MojangApiClient.computeOfflineUUID(name);
+        if (!offlineUuid.equals(currentUuid) && (msg = checkBan(banList, offlineUuid, name)) != null) {
+            debugLog("Player '" + name + "' is banned by offline UUID " + offlineUuid);
+            return msg;
+        }
+
+        CacheEntry cached = cache.get(name.toLowerCase());
         if (cached != null && cached.premium()) {
-            if (Bukkit.getOfflinePlayer(cached.uuid()).isWhitelisted()) {
-                event.allow();
-                if (config.isDebugLogging()) {
-                    logger.info("[DEBUG] Allowed whitelisted player '" + name + "' (matched by cached premium UUID).");
-                }
-                return;
+            UUID premiumUuid = cached.uuid();
+            if (!premiumUuid.equals(currentUuid) && (msg = checkBan(banList, premiumUuid, name)) != null) {
+                debugLog("Player '" + name + "' is banned by cached premium UUID " + premiumUuid);
+                return msg;
             }
         }
 
-        // 3) Fallback: check by name
-        for (org.bukkit.OfflinePlayer wp : Bukkit.getWhitelistedPlayers()) {
-            String wpName = wp.getName();
-            if (wpName != null && wpName.equalsIgnoreCase(name)) {
-                event.allow();
-                if (config.isDebugLogging()) {
-                    logger.info("[DEBUG] Allowed whitelisted player '" + name + "' (matched by name).");
-                }
-                return;
+        if ((msg = checkBan(banList, null, name)) != null) {
+            debugLog("Player '" + name + "' is banned by name.");
+            return msg;
+        }
+
+        return null;
+    }
+
+    private String checkBan(org.bukkit.ban.ProfileBanList banList, UUID uuid, String name) {
+        PlayerProfile profile = Bukkit.createProfile(uuid, name);
+        if (!banList.isBanned(profile)) {
+            return null;
+        }
+
+        try {
+            org.bukkit.BanEntry<?> directEntry = banList.getBanEntry(profile);
+            if (directEntry != null && directEntry.getReason() != null) {
+                return "You are banned from this server.\nReason: " + directEntry.getReason();
+            }
+        } catch (Exception ignored) {}
+
+        for (org.bukkit.BanEntry<?> entry : banList.getEntries()) {
+            String targetStr = entry.getTarget();
+            boolean match = false;
+
+            if (name != null && name.equalsIgnoreCase(targetStr)) {
+                match = true;
+            } else if (uuid != null && uuid.toString().equalsIgnoreCase(targetStr)) {
+                match = true;
+            } else {
+                try {
+                    Object obj = entry.getBanTarget();
+                    if (obj instanceof org.bukkit.profile.PlayerProfile p) {
+                        if (uuid != null && uuid.equals(p.getUniqueId())) match = true;
+                        if (!match && name != null && name.equalsIgnoreCase(p.getName())) match = true;
+                    } else if (obj instanceof com.destroystokyo.paper.profile.PlayerProfile p2) {
+                        if (uuid != null && uuid.equals(p2.getId())) match = true;
+                        if (!match && name != null && name.equalsIgnoreCase(p2.getName())) match = true;
+                    }
+                } catch (Exception ignored) {}
+            }
+
+            if (match) {
+                String r = entry.getReason();
+                return (r != null) ? "You are banned from this server.\nReason: " + r : "You are banned from this server.";
             }
         }
+
+        return "You are banned from this server.";
+    }
+
+    private boolean isAnyIdentityWhitelisted(String name, UUID currentUuid) {
+        if (Bukkit.getOfflinePlayer(currentUuid).isWhitelisted()) return true;
+
+        UUID offlineUuid = MojangApiClient.computeOfflineUUID(name);
+        if (!offlineUuid.equals(currentUuid) && Bukkit.getOfflinePlayer(offlineUuid).isWhitelisted()) return true;
+
+        CacheEntry cached = cache.get(name.toLowerCase());
+        if (cached != null && cached.premium()) {
+            UUID premiumUuid = cached.uuid();
+            if (!premiumUuid.equals(currentUuid) && Bukkit.getOfflinePlayer(premiumUuid).isWhitelisted()) return true;
+        }
+
+        return Bukkit.getWhitelistedPlayers().stream().anyMatch(wp -> name.equalsIgnoreCase(wp.getName()));
+    }
+
+    private void debugLog(String message) {
+        if (config.isDebugLogging()) {
+            logger.info("[DEBUG] " + message);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onPlayerCommand(org.bukkit.event.player.PlayerCommandPreprocessEvent event) {
+        handleUnbanCommand(event.getMessage());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onServerCommand(org.bukkit.event.server.ServerCommandEvent event) {
+        handleUnbanCommand(event.getCommand());
+    }
+
+    private void handleUnbanCommand(String commandLine) {
+        String cmd = commandLine.trim();
+        if (cmd.startsWith("/")) {
+            cmd = cmd.substring(1);
+        }
+        String[] parts = cmd.split("\\s+");
+        if (parts.length >= 2) {
+            String label = parts[0].toLowerCase();
+            if (label.equals("pardon") || label.equals("unban")) {
+                String targetName = parts[1];
+                Bukkit.getScheduler().runTask(plugin, () -> pardonAllIdentities(targetName));
+            }
+        }
+    }
+
+    private void pardonAllIdentities(String name) {
+        org.bukkit.ban.ProfileBanList banList = Bukkit.getBanList(io.papermc.paper.ban.BanListType.PROFILE);
+        
+        UUID offlineUuid = MojangApiClient.computeOfflineUUID(name);
+        banList.pardon(Bukkit.createProfile(offlineUuid, null));
+        
+        CacheEntry cached = cache.get(name.toLowerCase());
+        if (cached != null && cached.premium()) {
+            banList.pardon(Bukkit.createProfile(cached.uuid(), null));
+        }
+
+        banList.pardon(Bukkit.createProfile(null, name));
+        
+        debugLog("Automatically pardoned all known identities for '" + name + "' after command interception.");
     }
 }
