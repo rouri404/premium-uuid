@@ -12,9 +12,7 @@ import java.util.UUID;
 import java.util.logging.Logger;
 
 /**
- * Thin HTTP client for the Mojang username → UUID API.
- * <p>
- * Uses the JDK {@link HttpClient} with per-request timeouts.
+ * Mojang API HTTP client. Handles fast timeouts and rate-limiting (HTTP 429) gracefully.
  */
 public final class MojangApiClient {
 
@@ -30,27 +28,12 @@ public final class MojangApiClient {
                 .build();
     }
 
-    // ── Result types ────────────────────────────────────────────────────
-
-    /** Sealed interface so callers handle both cases explicitly. */
     public sealed interface LookupResult permits Success, Failure {}
 
-    /** Successful lookup: either the player exists (premium) or does not. */
     public record Success(UUID uuid, String correctName, boolean premium) implements LookupResult {}
 
-    /** The API call failed (timeout, network error, rate-limit). */
     public record Failure(String reason) implements LookupResult {}
 
-    // ── Public API ──────────────────────────────────────────────────────
-
-    /**
-     * Queries the Mojang API for the given username.
-     *
-     * @param username   the player's username
-     * @param timeoutMs  per-request timeout in milliseconds
-     * @param debug      whether to log debug information
-     * @return a {@link LookupResult} — either {@link Success} or {@link Failure}
-     */
     public LookupResult lookup(String username, int timeoutMs, boolean debug) {
         URI uri = URI.create(API_URL + username);
         HttpRequest request = HttpRequest.newBuilder()
@@ -77,8 +60,7 @@ public final class MojangApiClient {
                 return parsePremiumResponse(body);
             }
 
-            if (status == 204 || status == 404) {
-                // Username does not correspond to a premium account.
+            if (status == 204 || status == 404) { // username not found → not premium
                 UUID offlineUuid = computeOfflineUUID(username);
                 return new Success(offlineUuid, username, false);
             }
@@ -103,8 +85,6 @@ public final class MojangApiClient {
         }
     }
 
-    // ── Helpers ─────────────────────────────────────────────────────────
-
     private Success parsePremiumResponse(String body) {
         JsonObject json = JsonParser.parseString(body).getAsJsonObject();
         String rawId = json.get("id").getAsString();
@@ -113,10 +93,6 @@ public final class MojangApiClient {
         return new Success(uuid, correctName, true);
     }
 
-    /**
-     * Converts a 32-char undashed UUID string to a {@link UUID}.
-     * Example: "069a79f444e94726a5befca90e38aaf5" → 069a79f4-44e9-4726-a5be-fca90e38aaf5
-     */
     static UUID fromUndashed(String id) {
         if (id.length() != 32) {
             throw new IllegalArgumentException("Invalid undashed UUID length: " + id);
@@ -129,8 +105,7 @@ public final class MojangApiClient {
         return UUID.fromString(dashed);
     }
 
-    /** Computes the standard offline-mode UUID for a username. */
-    public static UUID computeOfflineUUID(String username) {
+    public static UUID computeOfflineUUID(String username) { // same algorithm as Minecraft server
         return UUID.nameUUIDFromBytes(("OfflinePlayer:" + username).getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 }
