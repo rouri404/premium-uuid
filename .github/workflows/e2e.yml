@@ -1,0 +1,63 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [ "**" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  e2e-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up JDK 21 (For compiling the plugin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: gradle
+          
+      - name: Build Plugin Jar locally
+        run: |
+          chmod +x gradlew
+          ./gradlew clean jar
+          LATEST_VIAVERSION=$(curl -s "https://api.modrinth.com/v2/project/viaversion/version" | jq -r '.[0].files[0].url')
+          LATEST_VIABACKWARDS=$(curl -s "https://api.modrinth.com/v2/project/viabackwards/version" | jq -r '.[0].files[0].url')
+          curl -sL "$LATEST_VIAVERSION" -o build/libs/ViaVersion.jar
+          curl -sL "$LATEST_VIABACKWARDS" -o build/libs/ViaBackwards.jar
+
+      - name: Set up Node.js for E2E
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          
+      - name: Install E2E Dependencies
+        working-directory: ./e2e
+        run: npm install
+        
+      - name: Start Paper Server (Docker)
+        run: |
+          mkdir -p build/config
+          echo "settings:" > build/config/bukkit.yml
+          echo "  connection-throttle: -1" >> build/config/bukkit.yml
+          chmod -R 777 build/config
+          docker run -d --name mcserver -p 25565:25565 -e EULA=TRUE -e TYPE=PAPER -e VERSION=26.2 -e ONLINE_MODE=FALSE -v ${{ github.workspace }}/build/libs/:/plugins/ -v ${{ github.workspace }}/build/config/bukkit.yml:/data/bukkit.yml:ro itzg/minecraft-server
+          
+      - name: Wait for Server to Start
+        run: |
+          echo "Waiting for Minecraft server to start..."
+          while ! docker logs mcserver | grep -q "For help, type"; do
+            sleep 2
+          done
+          echo "Server is ready for E2E testing."
+          
+      - name: Run E2E Test (Mineflayer)
+        working-directory: ./e2e
+        run: node test.js
+        
+      - name: Show Server Logs (On Failure)
+        if: failure()
+        run: docker logs mcserver
