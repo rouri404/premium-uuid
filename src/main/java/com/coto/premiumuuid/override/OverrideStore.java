@@ -37,6 +37,15 @@ public final class OverrideStore {
         save();
     }
 
+    public boolean remove(String nickLower) {
+        Boolean removed = overrides.remove(nickLower);
+        if (removed != null) {
+            save();
+            return true;
+        }
+        return false;
+    }
+
     public Set<Map.Entry<String, Boolean>> entrySet() {
         return overrides.entrySet();
     }

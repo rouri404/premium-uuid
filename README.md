@@ -12,7 +12,7 @@ A lightweight Paper plugin that resolves premium (Mojang) UUIDs on `online-mode=
 
 ```bash
 # 1. Download the latest release
-curl -Lo https://github.com/rouri404/premium-uuid/releases/latest/download/PremiumUUID-1.2.0.jar
+curl -Lo https://github.com/rouri404/premium-uuid/releases/latest/download/PremiumUUID-1.3.0.jar
 
 # 2. Move it to your server's plugins folder
 mv PremiumUUID-*.jar /path/to/server/plugins/
@@ -80,6 +80,7 @@ Permission: `premiumuuid.admin` (default: op)
 | `/premiumuuid clearcache [nick]` | Clears the entire UUID cache, or a single entry |
 | `/premiumuuid enable <nick>` | Forces premium check **on** for that nick, even if `premium-uuid-enabled: false` |
 | `/premiumuuid disable <nick>` | Forces premium check **off** for that nick, even if `premium-uuid-enabled: true` — always logs in with offline UUID, no cache or API call |
+| `/premiumuuid reset <nick>` | Removes any override for that nick, resetting it to default (`unset`  ) |
 
 ### Per-Nickname Overrides
 
@@ -137,7 +138,7 @@ flowchart TD
 # Requires Java 21+
 ./gradlew jar
 
-# Output: build/libs/PremiumUUID-1.2.0.jar
+# Output: build/libs/PremiumUUID-1.3.0.jar
 ```
 
 ## Contributing

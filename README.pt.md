@@ -11,7 +11,7 @@ Um plugin leve para Paper que resolve UUIDs premium (Mojang) em servidores `onli
 
 ```bash
 # 1. Baixe a última release
-curl -LO https://github.com/rouri404/premium-uuid/releases/latest/download/PremiumUUID-1.2.0.jar
+curl -LO https://github.com/rouri404/premium-uuid/releases/latest/download/PremiumUUID-1.3.0.jar
 
 # 2. Mova para a pasta plugins do servidor
 mv PremiumUUID-*.jar /caminho/para/servidor/plugins/
@@ -79,6 +79,7 @@ Permissão: `premiumuuid.admin` (padrão: op)
 | `/premiumuuid clearcache [nick]` | Limpa todo o cache de UUIDs, ou uma única entrada |
 | `/premiumuuid enable <nick>` | Força a checagem premium **ligada** para esse nick, mesmo com `premium-uuid-enabled: false` |
 | `/premiumuuid disable <nick>` | Força a checagem premium **desligada** para esse nick, mesmo com `premium-uuid-enabled: true` — sempre entra com UUID offline, sem cache nem API |
+| `/premiumuuid reset <nick>` | Remove qualquer override para esse nick, retornando ao padrão (`unset`) |
 
 ### Overrides Individuais por Nick
 
@@ -136,7 +137,7 @@ flowchart TD
 # Requer Java 21+
 ./gradlew jar
 
-# Saída: build/libs/PremiumUUID-1.2.0.jar
+# Saída: build/libs/PremiumUUID-1.3.0.jar
 ```
 
 ## Contribuindo

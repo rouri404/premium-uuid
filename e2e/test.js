@@ -9,6 +9,21 @@ const SERVER_PORT = 25565;
 
 console.log("Starting End-to-End (E2E) test suite...");
 
+// Suppress known Mineflayer/Protodef parsing spam that clutters the logs
+const originalConsoleError = console.error;
+console.error = function (...args) {
+    if (args[0] && typeof args[0] === 'string' && args[0].includes('PartialReadError')) return;
+    if (args[0] && args[0].name === 'PartialReadError') return;
+    if (args[0] && args[0].stack && args[0].stack.includes('PartialReadError')) return;
+    originalConsoleError.apply(console, args);
+};
+
+process.on('uncaughtException', (err) => {
+    if (err.name === 'PartialReadError' || (err.message && err.message.includes('PartialReadError'))) return;
+    originalConsoleError("Uncaught Exception:", err);
+    process.exit(1);
+});
+
 function runRcon(command) {
     try {
         console.log(`[RCON] Executing: /${command}`);
@@ -245,6 +260,11 @@ async function runTestSuite() {
         await runPlayerCommand(OP_NAME, `premiumuuid disable ${NON_OP_NAME}`, `Override for '${NON_OP_NAME}' set to disabled.`);
         await runPlayerCommand(OP_NAME, `premiumuuid status ${NON_OP_NAME}`, `Override: inactive`);
         console.log("[Test 10] Passed.\n");
+
+        console.log("--- Test 11: Reset Override ---");
+        await runPlayerCommand(OP_NAME, `premiumuuid reset ${NON_OP_NAME}`, `Override for '${NON_OP_NAME}' has been reset.`);
+        await runPlayerCommand(OP_NAME, `premiumuuid status ${NON_OP_NAME}`, `Override: unset`);
+        console.log("[Test 11] Passed.\n");
 
         console.log("All E2E tests completed successfully.");
         process.exit(0);
