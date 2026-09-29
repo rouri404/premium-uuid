@@ -9,7 +9,7 @@ authors:
 commands:
   premiumuuid:
     description: PremiumUUID admin commands.
-    usage: /<command> <reload|status|clearcache|enable|disable> [nick]
+    usage: /<command> <reload|status|clearcache|enable|disable|reset> [nick]
     aliases:
       - puuid
     permission: premiumuuid.admin

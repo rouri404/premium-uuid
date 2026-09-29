@@ -49,6 +49,7 @@ public final class PremiumUUIDCommand implements TabExecutor {
             case "clearcache" -> handleClearCache(sender, args);
             case "enable"     -> handleOverride(sender, args, label, true);
             case "disable"    -> handleOverride(sender, args, label, false);
+            case "reset"      -> handleReset(sender, args, label);
             default -> {
                 sendUsage(sender, label);
                 yield true;
@@ -95,7 +96,7 @@ public final class PremiumUUIDCommand implements TabExecutor {
                         expired ? NamedTextColor.RED : NamedTextColor.GREEN)));
 
         Boolean ov = overrides.get(target);
-        String ovValue = ov == null ? "none" : (ov ? "active" : "inactive");
+        String ovValue = ov == null ? "unset" : (ov ? "active" : "inactive");
         NamedTextColor ovColor = ov == null ? NamedTextColor.DARK_GRAY
                 : (ov ? NamedTextColor.GREEN : NamedTextColor.RED);
         sender.sendMessage(Component.text("  Override: ", NamedTextColor.GRAY)
@@ -137,11 +138,26 @@ public final class PremiumUUIDCommand implements TabExecutor {
         return true;
     }
 
+    private boolean handleReset(CommandSender sender, String[] args, String label) {
+        if (args.length < 2) {
+            sender.sendMessage(Component.text("Usage: /" + label + " reset <player>", NamedTextColor.RED));
+            return true;
+        }
+
+        String nick = args[1].toLowerCase();
+        if (overrides.remove(nick)) {
+            sender.sendMessage(Component.text("Override for '" + nick + "' has been reset.", NamedTextColor.GREEN));
+        } else {
+            sender.sendMessage(Component.text("No override found for '" + nick + "'.", NamedTextColor.YELLOW));
+        }
+        return true;
+    }
+
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command,
                                                 @NotNull String label, @NotNull String[] args) {
         if (args.length == 1) {
-            return filterStartsWith(List.of("reload", "status", "clearcache", "enable", "disable"), args[0]);
+            return filterStartsWith(List.of("reload", "status", "clearcache", "enable", "disable", "reset"), args[0]);
         }
         if (args.length == 2) {
             String sub = args[0].toLowerCase();
@@ -152,7 +168,7 @@ public final class PremiumUUIDCommand implements TabExecutor {
                 }
                 return filterStartsWith(cached, args[1]);
             }
-            if ("enable".equals(sub) || "disable".equals(sub)) {
+            if ("enable".equals(sub) || "disable".equals(sub) || "reset".equals(sub)) {
                 List<String> nicks = new ArrayList<>();
                 for (var entry : overrides.entrySet()) {
                     nicks.add(entry.getKey());
@@ -165,7 +181,7 @@ public final class PremiumUUIDCommand implements TabExecutor {
 
     private void sendUsage(CommandSender sender, String label) {
         sender.sendMessage(Component.text(
-                "Usage: /" + label + " <reload | status | clearcache | enable | disable> [player]",
+                "Usage: /" + label + " <reload | status | clearcache | enable | disable | reset> [player]",
                 NamedTextColor.YELLOW));
     }
 
