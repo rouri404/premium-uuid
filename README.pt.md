@@ -26,7 +26,7 @@ Pronto — o plugin funciona de cara com valores padrão sensatos. Nenhuma confi
 Em servidores offline-mode, todo jogador recebe um UUID offline, o que quebra a continuidade de conta para quem tem Minecraft original. O PremiumUUID detecta se um nickname pertence a uma conta premium existente e, se sim, atribui o UUID real da Mojang — preservando inventários, stats e permissões entre sessões.
 
 > [!CAUTION]
-> **Este plugin NÃO verifica a posse da conta.** Ele apenas checa se um nickname existe como conta premium na Mojang — não autentica o jogador. Isso significa que um jogador usando um launcher pirata pode entrar com qualquer nick premium e receberá o UUID daquela conta, tendo acesso total ao inventário, stats e permissões dela. **Use este plugin apenas em servidores privados e fechados, onde você conhece e confia em todos os jogadores.**
+> **Este plugin NÃO verifica a posse da conta.** Ele apenas checa se um nickname existe como conta premium na Mojang — não autentica o jogador. Isso significa que qualquer jogador não autenticado pode entrar com qualquer nick premium e receberá o UUID daquela conta, tendo acesso total ao inventário, stats e permissões dela. **Use este plugin apenas em servidores privados e fechados, onde você conhece e confia em todos os jogadores.**
 
 ## Funcionalidades
 

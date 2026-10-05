@@ -27,7 +27,7 @@ That's it — the plugin works out of the box with sensible defaults. No extra c
 On offline-mode servers, every player receives an offline UUID, which breaks account continuity for players who own Minecraft. PremiumUUID detects whether a nickname belongs to an existing premium account and, if so, assigns the real Mojang UUID — preserving inventories, stats, and permissions across sessions.
 
 > [!CAUTION]
-> **This plugin does NOT verify account ownership.** It only checks whether a nickname exists as a premium account on Mojang — it does not authenticate the player. This means a player using a pirated launcher can log in with any premium nickname and will receive that account's UUID, gaining full access to its inventory, stats, and permissions. **Use this plugin only on private, trusted servers where you know and trust every player.**
+> **This plugin does NOT verify account ownership.** It only checks whether a nickname exists as a premium account on Mojang — it does not authenticate the player. This means any unauthenticated player can log in with any premium nickname and will receive that account's UUID, gaining full access to its inventory, stats, and permissions. **Use this plugin only on private, trusted servers where you know and trust every player.**
 
 ## Features
 
