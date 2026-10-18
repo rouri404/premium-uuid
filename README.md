@@ -5,6 +5,7 @@
 [![Mojang API](https://img.shields.io/website?url=https%3A%2F%2Fapi.mojang.com%2Fusers%2Fprofiles%2Fminecraft%2FNotch&style=plastic&label=Mojang%20API)](https://api.mojang.com/)
 [![License](https://img.shields.io/github/license/rouri404/premium-uuid?style=plastic)](LICENSE) *[Ler em Português](README.pt.md)*
 
+<a href="https://modrinth.com/plugin/premiumuuid"><img src=".github/assets/modrinth.png" alt="Download on Modrinth" width="200"></a>
 
 A lightweight Paper plugin that resolves premium (Mojang) UUIDs on `online-mode=false` servers by checking player nicknames against the Mojang API.
 
