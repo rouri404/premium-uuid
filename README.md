@@ -15,7 +15,7 @@ Built against the Paper API 1.21.7 (`api-version: 1.21`); CI runs the end-to-end
 
 ```bash
 # 1. Download the latest release
-curl -LO https://github.com/rouri404/premium-uuid/releases/latest/download/PremiumUUID-1.3.0.jar
+curl -LO https://github.com/rouri404/premium-uuid/releases/latest/download/PremiumUUID-1.3.1.jar
 
 # 2. Move it to your server's plugins folder
 mv PremiumUUID-*.jar /path/to/server/plugins/
@@ -144,7 +144,7 @@ flowchart TD
 # Requires Java 21+
 ./gradlew jar
 
-# Output: build/libs/PremiumUUID-1.3.0.jar
+# Output: build/libs/PremiumUUID-1.3.1.jar
 ```
 
 ## Contributing

@@ -9,7 +9,12 @@ on:
 
 jobs:
   e2e-tests:
+    name: E2E (Paper ${{ matrix.paper }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        paper: [ "1.21.1", "1.21.4", "1.21.7", "1.21.11", "26.1.2", "26.2", "26.3" ]
     steps:
       - uses: actions/checkout@v4
       
@@ -43,7 +48,7 @@ jobs:
           echo "settings:" > build/config/bukkit.yml
           echo "  connection-throttle: -1" >> build/config/bukkit.yml
           chmod -R 777 build/config
-          docker run -d --name mcserver -p 25565:25565 -e EULA=TRUE -e TYPE=PAPER -e VERSION=26.2 -e ONLINE_MODE=FALSE -v ${{ github.workspace }}/build/libs/:/plugins/ -v ${{ github.workspace }}/build/config/bukkit.yml:/data/bukkit.yml:ro itzg/minecraft-server
+          docker run -d --name mcserver -p 25565:25565 -e EULA=TRUE -e TYPE=PAPER -e VERSION=${{ matrix.paper }} -e ONLINE_MODE=FALSE -v ${{ github.workspace }}/build/libs/:/plugins/ -v ${{ github.workspace }}/build/config/bukkit.yml:/data/bukkit.yml:ro itzg/minecraft-server
           
       - name: Wait for Server to Start
         run: |
