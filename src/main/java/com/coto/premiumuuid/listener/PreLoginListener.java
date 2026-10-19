@@ -15,15 +15,20 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.AsyncPlayerPreLoginEvent;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import java.util.logging.Logger;
 
 /**
  * Core listener handling UUID resolution in two steps:
  * 1. AsyncPreLogin (LOWEST): Fetches Premium UUID via API/Cache asynchronously.
- * 2. SyncLogin (HIGHEST): Intercepts Ban/Whitelist kicks to verify all possible identities.
+ * 2. SyncLogin (HIGHEST): Enforces bans on every known identity and admits players whitelisted
+ *    under an alternate identity.
  */
 public final class PreLoginListener implements Listener {
+
+    private static final String PARDON_PERMISSION = "minecraft.command.pardon";
 
     private final PluginConfig config;
     private final UUIDCache cache;
@@ -131,20 +136,15 @@ public final class PreLoginListener implements Listener {
                 event.disallow(org.bukkit.event.player.PlayerLoginEvent.Result.KICK_BANNED, banMsg);
             }
             return;
-        } else if (event.getResult() == org.bukkit.event.player.PlayerLoginEvent.Result.KICK_BANNED) {
-            event.allow();
-            debugLog("Player '" + name + "' was kicked as banned, but no ban found for any known identity. Allowing login.");
         }
 
-        if (Bukkit.hasWhitelist()) {
-            if (!isAnyIdentityWhitelisted(name, currentUuid)) {
-                if (event.getResult() != org.bukkit.event.player.PlayerLoginEvent.Result.KICK_WHITELIST) {
-                    event.disallow(org.bukkit.event.player.PlayerLoginEvent.Result.KICK_WHITELIST, "You are not whitelisted on this server!");
-                }
-            } else if (event.getResult() == org.bukkit.event.player.PlayerLoginEvent.Result.KICK_WHITELIST) {
-                event.allow();
-                debugLog("Allowed whitelisted player '" + name + "' (matched by alternate identity).");
-            }
+        // An existing KICK_BANNED is never lifted: it may come from an IP ban or another plugin.
+        // Only a whitelist kick is reconsidered, and only when an alternate identity is whitelisted (or op),
+        // so vanilla's op bypass and other kick reasons (e.g. KICK_FULL) are left untouched.
+        if (event.getResult() == org.bukkit.event.player.PlayerLoginEvent.Result.KICK_WHITELIST
+                && isAnyIdentityWhitelisted(name, currentUuid)) {
+            event.allow();
+            debugLog("Allowed whitelisted player '" + name + "' (matched by alternate identity).");
         }
     }
 
@@ -224,18 +224,22 @@ public final class PreLoginListener implements Listener {
     }
 
     private boolean isAnyIdentityWhitelisted(String name, UUID currentUuid) {
-        if (Bukkit.getOfflinePlayer(currentUuid).isWhitelisted()) return true;
+        if (isWhitelistedOrOp(Bukkit.getOfflinePlayer(currentUuid))) return true;
 
         UUID offlineUuid = MojangApiClient.computeOfflineUUID(name);
-        if (!offlineUuid.equals(currentUuid) && Bukkit.getOfflinePlayer(offlineUuid).isWhitelisted()) return true;
+        if (!offlineUuid.equals(currentUuid) && isWhitelistedOrOp(Bukkit.getOfflinePlayer(offlineUuid))) return true;
 
         CacheEntry cached = cache.get(name.toLowerCase());
         if (cached != null && cached.premium()) {
             UUID premiumUuid = cached.uuid();
-            if (!premiumUuid.equals(currentUuid) && Bukkit.getOfflinePlayer(premiumUuid).isWhitelisted()) return true;
+            if (!premiumUuid.equals(currentUuid) && isWhitelistedOrOp(Bukkit.getOfflinePlayer(premiumUuid))) return true;
         }
 
         return Bukkit.getWhitelistedPlayers().stream().anyMatch(wp -> name.equalsIgnoreCase(wp.getName()));
+    }
+
+    private static boolean isWhitelistedOrOp(org.bukkit.OfflinePlayer player) {
+        return player.isWhitelisted() || player.isOp(); // ops bypass the whitelist, as in vanilla
     }
 
     private void debugLog(String message) {
@@ -246,42 +250,70 @@ public final class PreLoginListener implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onPlayerCommand(org.bukkit.event.player.PlayerCommandPreprocessEvent event) {
-        handleUnbanCommand(event.getMessage());
+        handleUnbanCommand(event.getPlayer(), event.getMessage());
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onServerCommand(org.bukkit.event.server.ServerCommandEvent event) {
-        handleUnbanCommand(event.getCommand());
+        handleUnbanCommand(event.getSender(), event.getCommand());
     }
 
-    private void handleUnbanCommand(String commandLine) {
+    /**
+     * Runs before the command is dispatched, so it cannot rely on the command having succeeded.
+     * The other identities are only pardoned if the sender may use vanilla's /pardon, or if the
+     * command itself (vanilla or another plugin's /unban) lifted at least one of the bans.
+     */
+    private void handleUnbanCommand(org.bukkit.command.CommandSender sender, String commandLine) {
         String cmd = commandLine.trim();
         if (cmd.startsWith("/")) {
             cmd = cmd.substring(1);
         }
         String[] parts = cmd.split("\\s+");
-        if (parts.length >= 2) {
-            String label = parts[0].toLowerCase();
-            if (label.equals("pardon") || label.equals("unban")) {
-                String targetName = parts[1];
-                Bukkit.getScheduler().runTask(plugin, () -> pardonAllIdentities(targetName));
-            }
+        if (parts.length < 2) return;
+
+        String label = parts[0].toLowerCase();
+        int colon = label.indexOf(':'); // e.g. minecraft:pardon, essentials:unban
+        if (colon >= 0) {
+            label = label.substring(colon + 1);
         }
+        if (!label.equals("pardon") && !label.equals("unban")) return;
+
+        String targetName = parts[1];
+        org.bukkit.ban.ProfileBanList banList = Bukkit.getBanList(io.papermc.paper.ban.BanListType.PROFILE);
+        List<PlayerProfile> bannedBefore = new ArrayList<>();
+        for (PlayerProfile identity : knownIdentities(targetName)) {
+            if (banList.isBanned(identity)) bannedBefore.add(identity);
+        }
+        if (bannedBefore.isEmpty()) return;
+
+        boolean permitted = label.equals("pardon") && sender.hasPermission(PARDON_PERMISSION);
+
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            boolean liftedByCommand = bannedBefore.stream().anyMatch(identity -> !banList.isBanned(identity));
+            if (permitted || liftedByCommand) {
+                pardonAllIdentities(banList, targetName);
+            } else {
+                debugLog("Ignored '/" + parts[0] + " " + targetName + "' from " + sender.getName()
+                        + ": no permission and the command did not lift any ban.");
+            }
+        });
     }
 
-    private void pardonAllIdentities(String name) {
-        org.bukkit.ban.ProfileBanList banList = Bukkit.getBanList(io.papermc.paper.ban.BanListType.PROFILE);
-        
-        UUID offlineUuid = MojangApiClient.computeOfflineUUID(name);
-        banList.pardon(Bukkit.createProfile(offlineUuid, null));
-        
+    private List<PlayerProfile> knownIdentities(String name) {
+        List<PlayerProfile> identities = new ArrayList<>();
+        identities.add(Bukkit.createProfile(MojangApiClient.computeOfflineUUID(name), null));
         CacheEntry cached = cache.get(name.toLowerCase());
         if (cached != null && cached.premium()) {
-            banList.pardon(Bukkit.createProfile(cached.uuid(), null));
+            identities.add(Bukkit.createProfile(cached.uuid(), null));
         }
+        identities.add(Bukkit.createProfile(null, name));
+        return identities;
+    }
 
-        banList.pardon(Bukkit.createProfile(null, name));
-        
+    private void pardonAllIdentities(org.bukkit.ban.ProfileBanList banList, String name) {
+        for (PlayerProfile identity : knownIdentities(name)) {
+            banList.pardon(identity);
+        }
         debugLog("Automatically pardoned all known identities for '" + name + "' after command interception.");
     }
 }
