@@ -24,10 +24,9 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew clean jar
-          LATEST_VIAVERSION=$(curl -s "https://api.modrinth.com/v2/project/viaversion/version" | jq -r '.[0].files[0].url')
-          LATEST_VIABACKWARDS=$(curl -s "https://api.modrinth.com/v2/project/viabackwards/version" | jq -r '.[0].files[0].url')
-          curl -sL "$LATEST_VIAVERSION" -o build/libs/ViaVersion.jar
-          curl -sL "$LATEST_VIABACKWARDS" -o build/libs/ViaBackwards.jar
+          # Pinned stable releases, so a new (or snapshot) Via build cannot break CI on its own
+          curl -fsSL "https://cdn.modrinth.com/data/P1OZGk5p/versions/5WgnasGG/ViaVersion-5.12.1.jar" -o build/libs/ViaVersion.jar
+          curl -fsSL "https://cdn.modrinth.com/data/NpvuJQoq/versions/dWw67APC/ViaBackwards-5.12.1.jar" -o build/libs/ViaBackwards.jar
 
       - name: Set up Node.js for E2E
         uses: actions/setup-node@v4
