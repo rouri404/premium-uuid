@@ -23,6 +23,7 @@ import java.util.UUID;
 import java.util.logging.Logger;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -84,16 +85,15 @@ class PreLoginListenerTest {
     }
 
     @Test
-    void testBan_NoBansFound_AllowsLogin() {
+    void testBan_NoProfileBanFound_KeepsForeignBan() {
+        // e.g. an IP ban or a ban from another plugin: not in the profile ban list
         when(event.getResult()).thenReturn(PlayerLoginEvent.Result.KICK_BANNED);
-        
-        // No identity is banned
         when(banList.isBanned(any(PlayerProfile.class))).thenReturn(false);
 
         listener.onPlayerLogin(event);
 
-        // Should cancel the kick (Bukkit false positive) and allow login
-        verify(event, times(1)).allow();
+        verify(event, never()).allow();
+        verify(event, never()).disallow(any(), anyString());
     }
 
     @Test
@@ -126,6 +126,40 @@ class PreLoginListenerTest {
     }
 
     @Test
+    void testWhitelist_AllowedByVanilla_NotOverridden() {
+        // e.g. an op who is not in whitelist.json: vanilla already let them through
+        lenient().when(event.getResult()).thenReturn(PlayerLoginEvent.Result.ALLOWED);
+        lenient().when(Bukkit.hasWhitelist()).thenReturn(true);
+        lenient().when(Bukkit.getWhitelistedPlayers()).thenReturn(Collections.emptySet());
+
+        listener.onPlayerLogin(event);
+
+        verify(event, never()).disallow(any(), anyString());
+    }
+
+    @Test
+    void testWhitelist_OtherKickReason_NotOverridden() {
+        lenient().when(event.getResult()).thenReturn(PlayerLoginEvent.Result.KICK_FULL);
+        lenient().when(Bukkit.hasWhitelist()).thenReturn(true);
+        lenient().when(Bukkit.getWhitelistedPlayers()).thenReturn(Collections.emptySet());
+
+        listener.onPlayerLogin(event);
+
+        verify(event, never()).disallow(any(), anyString());
+        verify(event, never()).allow();
+    }
+
+    @Test
+    void testWhitelist_AlternateIdentityIsOp_AllowsLogin() {
+        when(event.getResult()).thenReturn(PlayerLoginEvent.Result.KICK_WHITELIST);
+        when(offlinePlayer.isOp()).thenReturn(true);
+
+        listener.onPlayerLogin(event);
+
+        verify(event, times(1)).allow();
+    }
+
+    @Test
     void testBan_BypassIntercepted_BlocksLogin() {
         when(event.getResult()).thenReturn(PlayerLoginEvent.Result.ALLOWED);
 
@@ -149,23 +183,70 @@ class PreLoginListenerTest {
         verify(event, times(1)).disallow(eq(PlayerLoginEvent.Result.KICK_BANNED), org.mockito.ArgumentMatchers.contains("Bypassing is bad"));
     }
 
-    @Test
-    void testPardon_Intercepted() {
+    private org.mockito.ArgumentCaptor<Runnable> runPlayerCommand(String message, boolean hasPardonPermission) {
         org.bukkit.event.player.PlayerCommandPreprocessEvent cmdEvent = mock(org.bukkit.event.player.PlayerCommandPreprocessEvent.class);
-        when(cmdEvent.getMessage()).thenReturn("/pardon Notch");
-        
+        when(cmdEvent.getMessage()).thenReturn(message);
+        lenient().when(cmdEvent.getPlayer()).thenReturn(player);
+        lenient().when(player.hasPermission("minecraft.command.pardon")).thenReturn(hasPardonPermission);
+
         org.bukkit.scheduler.BukkitScheduler scheduler = mock(org.bukkit.scheduler.BukkitScheduler.class);
         lenient().when(Bukkit.getScheduler()).thenReturn(scheduler);
-        
+
         org.mockito.ArgumentCaptor<Runnable> runnableCaptor = org.mockito.ArgumentCaptor.forClass(Runnable.class);
-        
         listener.onPlayerCommand(cmdEvent);
-        
         verify(scheduler).runTask(eq(plugin), runnableCaptor.capture());
-        
-        runnableCaptor.getValue().run();
-        
+        return runnableCaptor;
+    }
+
+    @Test
+    void testPardon_Intercepted() {
+        when(banList.isBanned(any(PlayerProfile.class))).thenReturn(true);
+
+        runPlayerCommand("/pardon Notch", true).getValue().run();
+
         verify(banList, atLeastOnce()).pardon(any(PlayerProfile.class));
+    }
+
+    @Test
+    void testPardon_NamespacedLabel_Intercepted() {
+        when(banList.isBanned(any(PlayerProfile.class))).thenReturn(true);
+
+        runPlayerCommand("/minecraft:pardon Notch", true).getValue().run();
+
+        verify(banList, atLeastOnce()).pardon(any(PlayerProfile.class));
+    }
+
+    @Test
+    void testPardon_WithoutPermission_DoesNotPardon() {
+        // Command fails for lack of permission, so every ban is still there afterwards
+        when(banList.isBanned(any(PlayerProfile.class))).thenReturn(true);
+
+        runPlayerCommand("/pardon Notch", false).getValue().run();
+
+        verify(banList, never()).pardon(any(PlayerProfile.class));
+    }
+
+    @Test
+    void testUnban_OtherPluginLiftedBan_PardonsRemainingIdentities() {
+        // Before the command every identity is banned; afterwards one of them was lifted by the command
+        when(banList.isBanned(any(PlayerProfile.class))).thenReturn(true, true, true, false);
+
+        runPlayerCommand("/unban Notch", false).getValue().run();
+
+        verify(banList, atLeastOnce()).pardon(any(PlayerProfile.class));
+    }
+
+    @Test
+    void testPardon_NotBanned_DoesNothing() {
+        org.bukkit.event.player.PlayerCommandPreprocessEvent cmdEvent = mock(org.bukkit.event.player.PlayerCommandPreprocessEvent.class);
+        when(cmdEvent.getMessage()).thenReturn("/pardon Notch");
+        lenient().when(cmdEvent.getPlayer()).thenReturn(player);
+        when(banList.isBanned(any(PlayerProfile.class))).thenReturn(false);
+
+        listener.onPlayerCommand(cmdEvent);
+
+        bukkitMock.verify(Bukkit::getScheduler, never());
+        verify(banList, never()).pardon(any(PlayerProfile.class));
     }
 
     @Test
