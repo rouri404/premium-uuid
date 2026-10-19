@@ -6,3 +6,7 @@ build/
 .settings/
 .project
 .classpath
+# Docs (VitePress)
+docs/node_modules/
+docs/.vitepress/cache/
+docs/.vitepress/dist/
