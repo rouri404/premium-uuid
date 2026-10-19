@@ -9,11 +9,13 @@
 
 A lightweight Paper plugin that resolves premium (Mojang) UUIDs on `online-mode=false` servers by checking player nicknames against the Mojang API.
 
+Built against the Paper API 1.21.7 (`api-version: 1.21`); CI runs the end-to-end suite on Paper 26.2.
+
 ## Quick Start
 
 ```bash
 # 1. Download the latest release
-curl -Lo https://github.com/rouri404/premium-uuid/releases/latest/download/PremiumUUID-1.3.0.jar
+curl -LO https://github.com/rouri404/premium-uuid/releases/latest/download/PremiumUUID-1.3.0.jar
 
 # 2. Move it to your server's plugins folder
 mv PremiumUUID-*.jar /path/to/server/plugins/
@@ -35,9 +37,12 @@ On offline-mode servers, every player receives an offline UUID, which breaks acc
 - **Automatic UUID resolution** via `AsyncPlayerPreLoginEvent` (lowest priority)
 - **Persistent disk cache** (`uuid-cache.yml`) with configurable TTL
 - **Per-nickname override** (`overrides.yml`) — force premium check on or off for any nick, regardless of the global toggle
-- **Graceful fallback** — API failures never block login; stale cache or offline UUID is used instead
+- **Graceful fallback** — API failures never block login; stale cache or offline UUID is used instead. Lookups are bounded by `timeout-ms`, and the plugin backs off after a rate limit (HTTP 429) or a failed lookup instead of re-querying Mojang on every reconnect
 - **Admin commands** — reload config, check player status, clear cache, set overrides
-- **Zero overhead** when disabled via config
+- **Identity-aware bans and whitelist** — a ban on any known identity of a nick (offline UUID, cached premium UUID or name) is enforced; a whitelist kick is lifted when another identity of the nick is whitelisted or op. Bans from other sources (IP bans, other plugins) are never lifted. An authorized `/pardon` or `/unban` also pardons the other identities
+
+> [!NOTE]
+> `premium-uuid-enabled: false` only stops the UUID resolution. The ban, whitelist and pardon handling above stays active, so players who received a premium UUID earlier cannot use their offline identity to evade a ban.
 
 ## Configuration
 
@@ -62,9 +67,9 @@ logging:
 
 | Key | Description | Default |
 |-----|-------------|---------|
-| `premium-uuid-enabled` | Master toggle for the plugin logic | `true` |
-| `mojang-api.timeout-ms` | HTTP request timeout in milliseconds | `3000` |
-| `cache.file` | Cache filename inside the plugin data folder | `uuid-cache.yml` |
+| `premium-uuid-enabled` | Master toggle for premium UUID resolution (ban/whitelist handling stays active) | `true` |
+| `mojang-api.timeout-ms` | Maximum time for a whole Mojang lookup, in milliseconds | `3000` |
+| `cache.file` | Cache filename inside the plugin data folder (requires a restart; not applied by `reload`) | `uuid-cache.yml` |
 | `cache.ttl-minutes` | Time before a cache entry is revalidated | `1440` |
 | `fallback.log-warning` | Log a warning when falling back to offline UUID | `true` |
 | `logging.level` | `INFO` for decisions only, `DEBUG` for API call details | `INFO` |
