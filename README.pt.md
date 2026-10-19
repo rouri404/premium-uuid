@@ -9,6 +9,8 @@
 
 Um plugin leve para Paper que resolve UUIDs premium (Mojang) em servidores `online-mode=false`, checando nicknames de jogadores na API da Mojang.
 
+Compilado contra a Paper API 1.21.7 (`api-version: 1.21`); o CI roda a suíte end-to-end no Paper 26.2.
+
 ## Início Rápido
 
 ```bash
@@ -35,9 +37,12 @@ Em servidores offline-mode, todo jogador recebe um UUID offline, o que quebra a 
 - **Resolução automática de UUID** via `AsyncPlayerPreLoginEvent` (prioridade mais baixa)
 - **Cache persistente em disco** (`uuid-cache.yml`) com TTL configurável
 - **Override individual por nick** (`overrides.yml`) — force a checagem premium ligada ou desligada para qualquer nick, independente do toggle global
-- **Fallback gracioso** — falhas na API nunca bloqueiam o login; cache expirado ou UUID offline é usado
+- **Fallback gracioso** — falhas na API nunca bloqueiam o login; cache expirado ou UUID offline é usado. As consultas respeitam o `timeout-ms`, e o plugin faz backoff após rate limit (HTTP 429) ou falha, em vez de consultar a Mojang a cada reconexão
 - **Comandos administrativos** — recarregar config, consultar cache e override, limpar cache, definir overrides
-- **Zero overhead** quando desabilitado via config
+- **Bans e whitelist por identidade** — um ban em qualquer identidade conhecida do nick (UUID offline, UUID premium em cache ou nome) é aplicado; um kick de whitelist é liberado quando outra identidade do nick está na whitelist ou é op. Bans de outras origens (ban de IP, outros plugins) nunca são liberados. Um `/pardon` ou `/unban` autorizado também perdoa as outras identidades
+
+> [!NOTE]
+> `premium-uuid-enabled: false` desativa apenas a resolução de UUID. O tratamento de ban, whitelist e pardon acima continua ativo, para que jogadores que já receberam um UUID premium não usem a identidade offline para burlar um ban.
 
 ## Configuração
 
@@ -62,9 +67,9 @@ logging:
 
 | Chave | Descrição | Padrão |
 |-------|-----------|--------|
-| `premium-uuid-enabled` | Toggle principal da lógica do plugin | `true` |
-| `mojang-api.timeout-ms` | Timeout da requisição HTTP em milissegundos | `3000` |
-| `cache.file` | Nome do arquivo de cache dentro da pasta do plugin | `uuid-cache.yml` |
+| `premium-uuid-enabled` | Toggle principal da resolução de UUID premium (ban/whitelist continuam ativos) | `true` |
+| `mojang-api.timeout-ms` | Tempo máximo de uma consulta completa à Mojang, em milissegundos | `3000` |
+| `cache.file` | Nome do arquivo de cache dentro da pasta do plugin (exige reinício; o `reload` não aplica) | `uuid-cache.yml` |
 | `cache.ttl-minutes` | Tempo antes de uma entrada do cache ser revalidada | `1440` |
 | `fallback.log-warning` | Logar warning ao cair no fallback para UUID offline | `true` |
 | `logging.level` | `INFO` para decisões, `DEBUG` para detalhes das chamadas à API | `INFO` |
