@@ -1,9 +1,12 @@
 const mineflayer = require('mineflayer');
 const { execSync } = require('child_process');
 
-const BOT_NAME = "e2ebot";
-const OP_NAME = "e2etest1";
-const NON_OP_NAME = "e2etest2";
+// Random per-run nicks: fixed names could get registered as real premium accounts, which would
+// change the plugin's behaviour under test. A 4-char prefix + 8 hex chars stays within the 16-char limit.
+const RUN_ID = require('crypto').randomBytes(4).toString('hex');
+const BOT_NAME = `e2eb${RUN_ID}`;
+const OP_NAME = `e2eo${RUN_ID}`;
+const NON_OP_NAME = `e2en${RUN_ID}`;
 const SERVER_HOST = "127.0.0.1";
 const SERVER_PORT = 25565;
 
@@ -214,31 +217,41 @@ async function runTestSuite() {
         await attemptConnection(BOT_NAME, 'success');
         console.log("[Test 3] Passed.\n");
 
-        console.log("--- Test 4: Whitelist Enforcement ---");
+        console.log("--- Test 4: Non-OP Pardon Is Ignored ---");
+        runRcon(`ban ${BOT_NAME} "Banned again by E2E test"`);
+        await sleep(1000);
+        await runPlayerCommand(NON_OP_NAME, `pardon ${BOT_NAME}`, "unknown or incomplete command");
+        await sleep(2000); // the plugin would act one tick after the command
+        await attemptConnection(BOT_NAME, 'kicked', "Banned again by E2E test");
+        runRcon(`pardon ${BOT_NAME}`);
+        await sleep(2000);
+        console.log("[Test 4] Passed.\n");
+
+        console.log("--- Test 5: Whitelist Enforcement ---");
         runRcon("whitelist on");
         await sleep(1000);
         await attemptConnection(BOT_NAME, 'kicked', "whitelisted");
-        console.log("[Test 4] Passed.\n");
+        console.log("[Test 5] Passed.\n");
 
-        console.log("--- Test 5: Whitelist Admission ---");
+        console.log("--- Test 6: Whitelist Admission ---");
         runRcon(`whitelist add ${BOT_NAME}`);
         await sleep(1000);
         await attemptConnection(BOT_NAME, 'success');
-        console.log("[Test 5] Passed.\n");
+        console.log("[Test 6] Passed.\n");
 
-        console.log("--- Test 6: Non-OP Command Permission ---");
+        console.log("--- Test 7: Non-OP Command Permission ---");
         runRcon("whitelist off");
         await sleep(1000);
         runRcon(`deop ${NON_OP_NAME}`);
         await runPlayerCommand(NON_OP_NAME, "premiumuuid reload", "unknown or incomplete command");
-        console.log("[Test 6] Passed.\n");
-
-        console.log("--- Test 7: OP Commands ---");
-        runRcon(`op ${OP_NAME}`);
-        await runPlayerCommand(OP_NAME, "premiumuuid reload", "config reloaded");
         console.log("[Test 7] Passed.\n");
 
-        console.log("--- Test 8: Status and Cache Clearing ---");
+        console.log("--- Test 8: OP Commands ---");
+        runRcon(`op ${OP_NAME}`);
+        await runPlayerCommand(OP_NAME, "premiumuuid reload", "config reloaded");
+        console.log("[Test 8] Passed.\n");
+
+        console.log("--- Test 9: Status and Cache Clearing ---");
         await attemptConnection(OP_NAME, 'success');
         await sleep(1000);
         await runPlayerCommands(OP_NAME, [
@@ -247,24 +260,24 @@ async function runTestSuite() {
             { command: `premiumuuid status ${OP_NAME}`, expectedMessageSubstring: `No cache entry for '${OP_NAME}'.` },
             { command: "premiumuuid clearcache", expectedMessageSubstring: "Entire UUID cache cleared." }
         ]);
-        console.log("[Test 8] Passed.\n");
+        console.log("[Test 9] Passed.\n");
 
-        console.log("--- Test 9: Enable Override ---");
+        console.log("--- Test 10: Enable Override ---");
         await runPlayerCommand(OP_NAME, `puuid enable ${NON_OP_NAME}`, `Override for '${NON_OP_NAME}' set to enabled.`);
         await attemptConnection(NON_OP_NAME, 'success');
         await sleep(1000);
         await runPlayerCommand(OP_NAME, `premiumuuid status ${NON_OP_NAME}`, `Override: active`);
-        console.log("[Test 9] Passed.\n");
-
-        console.log("--- Test 10: Disable Override ---");
-        await runPlayerCommand(OP_NAME, `premiumuuid disable ${NON_OP_NAME}`, `Override for '${NON_OP_NAME}' set to disabled.`);
-        await runPlayerCommand(OP_NAME, `premiumuuid status ${NON_OP_NAME}`, `Override: inactive`);
         console.log("[Test 10] Passed.\n");
 
-        console.log("--- Test 11: Reset Override ---");
+        console.log("--- Test 11: Disable Override ---");
+        await runPlayerCommand(OP_NAME, `premiumuuid disable ${NON_OP_NAME}`, `Override for '${NON_OP_NAME}' set to disabled.`);
+        await runPlayerCommand(OP_NAME, `premiumuuid status ${NON_OP_NAME}`, `Override: inactive`);
+        console.log("[Test 11] Passed.\n");
+
+        console.log("--- Test 12: Reset Override ---");
         await runPlayerCommand(OP_NAME, `premiumuuid reset ${NON_OP_NAME}`, `Override for '${NON_OP_NAME}' has been reset.`);
         await runPlayerCommand(OP_NAME, `premiumuuid status ${NON_OP_NAME}`, `Override: unset`);
-        console.log("[Test 11] Passed.\n");
+        console.log("[Test 12] Passed.\n");
 
         console.log("All E2E tests completed successfully.");
         process.exit(0);
