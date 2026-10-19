@@ -13,6 +13,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
@@ -27,10 +31,11 @@ class PremiumUUIDCommandTest {
     @Mock Command command;
 
     PremiumUUIDCommand premiumCommand;
+    List<Runnable> ioTasks = new ArrayList<>();
 
     @BeforeEach
     void setUp() {
-        premiumCommand = new PremiumUUIDCommand(config, cache, overrides);
+        premiumCommand = new PremiumUUIDCommand(config, cache, overrides, ioTasks::add);
     }
 
     @Test
@@ -66,6 +71,37 @@ class PremiumUUIDCommandTest {
         verify(overrides, times(1)).remove("alex");
 
         // Verify failure/yellow message was sent
+        verify(sender, times(1)).sendMessage(any(Component.class));
+    }
+
+    @Test
+    void testClearCache_SavesOffMainThread() {
+        when(cache.remove("steve")).thenReturn(true);
+
+        premiumCommand.onCommand(sender, command, "premiumuuid", new String[]{"clearcache", "steve"});
+
+        // The write is handed to the I/O executor instead of running inline
+        verify(cache, never()).saveIfDirty();
+        assertEquals(1, ioTasks.size());
+        ioTasks.get(0).run();
+        verify(cache).saveIfDirty();
+    }
+
+    @Test
+    void testReload_WarnsWhenCacheFileChanged() {
+        when(config.reload()).thenReturn(true);
+
+        premiumCommand.onCommand(sender, command, "premiumuuid", new String[]{"reload"});
+
+        verify(sender, times(2)).sendMessage(any(Component.class));
+    }
+
+    @Test
+    void testReload_NoWarningWhenCacheFileUnchanged() {
+        when(config.reload()).thenReturn(false);
+
+        premiumCommand.onCommand(sender, command, "premiumuuid", new String[]{"reload"});
+
         verify(sender, times(1)).sendMessage(any(Component.class));
     }
 }

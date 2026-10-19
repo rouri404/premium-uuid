@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -20,6 +21,7 @@ public final class UUIDCache {
     private final File file;
     private final Logger logger;
     private final ConcurrentHashMap<String, CacheEntry> entries = new ConcurrentHashMap<>();
+    private final AtomicBoolean dirty = new AtomicBoolean(false);
 
     public UUIDCache(File dataFolder, String fileName, Logger logger) {
         this.file = new File(dataFolder, fileName);
@@ -35,13 +37,17 @@ public final class UUIDCache {
 
     public void put(String usernameLower, CacheEntry entry) {
         entries.put(usernameLower, entry);
+        dirty.set(true);
     }
 
     public boolean remove(String usernameLower) {
-        return entries.remove(usernameLower) != null;
+        boolean removed = entries.remove(usernameLower) != null;
+        if (removed) dirty.set(true);
+        return removed;
     }
 
     public void clear() {
+        if (!entries.isEmpty()) dirty.set(true);
         entries.clear();
     }
 
@@ -57,6 +63,7 @@ public final class UUIDCache {
 
     public void load() {
         entries.clear();
+        dirty.set(false);
         if (!file.exists()) return;
 
         YamlConfiguration yaml = YamlConfiguration.loadConfiguration(file);
@@ -79,7 +86,17 @@ public final class UUIDCache {
         logger.info("Loaded " + entries.size() + " cached UUID entries from " + file.getName());
     }
 
-    public synchronized void save() {
+    public boolean isDirty() {
+        return dirty.get();
+    }
+
+    /**
+     * Writes the cache to disk only if it changed since the last save.
+     * @return true if a write was attempted
+     */
+    public synchronized boolean saveIfDirty() {
+        // Cleared before the snapshot so concurrent changes made during the write mark it dirty again
+        if (!dirty.getAndSet(false)) return false;
         YamlConfiguration yaml = new YamlConfiguration();
 
         for (var mapEntry : entries.entrySet()) {
@@ -94,7 +111,9 @@ public final class UUIDCache {
             file.getParentFile().mkdirs();
             yaml.save(file);
         } catch (IOException e) {
+            dirty.set(true); // retry on the next save
             logger.log(Level.SEVERE, "Failed to save UUID cache to " + file.getName(), e);
         }
+        return true;
     }
 }
