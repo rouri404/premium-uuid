@@ -11,6 +11,8 @@ import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 
+import java.util.concurrent.Executor;
+
 public final class PremiumUUIDPlugin extends JavaPlugin {
 
     private PluginConfig pluginConfig;
@@ -22,16 +24,18 @@ public final class PremiumUUIDPlugin extends JavaPlugin {
     public void onEnable() {
         pluginConfig = new PluginConfig(this);
 
+        Executor ioExecutor = task -> getServer().getScheduler().runTaskAsynchronously(this, task);
+
         uuidCache = new UUIDCache(getDataFolder(), pluginConfig.getCacheFile(), getLogger());
 
-        overrideStore = new OverrideStore(getDataFolder(), getLogger());
+        overrideStore = new OverrideStore(getDataFolder(), getLogger(), ioExecutor);
 
         MojangApiClient mojangApi = new MojangApiClient(getLogger());
 
         getServer().getPluginManager().registerEvents(
                 new PreLoginListener(pluginConfig, uuidCache, mojangApi, overrideStore, getLogger(), this), this);
 
-        PremiumUUIDCommand cmdHandler = new PremiumUUIDCommand(pluginConfig, uuidCache, overrideStore);
+        PremiumUUIDCommand cmdHandler = new PremiumUUIDCommand(pluginConfig, uuidCache, overrideStore, ioExecutor);
         PluginCommand cmd = getCommand("premiumuuid");
         if (cmd != null) {
             cmd.setExecutor(cmdHandler);
@@ -39,8 +43,7 @@ public final class PremiumUUIDPlugin extends JavaPlugin {
         }
 
         saveTask = getServer().getScheduler().runTaskTimerAsynchronously(this, () -> {
-            uuidCache.save();
-            if (pluginConfig.isDebugLogging()) {
+            if (uuidCache.saveIfDirty() && pluginConfig.isDebugLogging()) {
                 getLogger().info("[DEBUG] Periodic cache save completed.");
             }
         }, 6000L, 6000L); // 5 minutes in ticks
@@ -54,9 +57,11 @@ public final class PremiumUUIDPlugin extends JavaPlugin {
         if (saveTask != null) {
             saveTask.cancel();
         }
-        if (uuidCache != null) {
-            uuidCache.save();
+        if (uuidCache != null && uuidCache.saveIfDirty()) {
             getLogger().info("UUID cache saved to disk.");
+        }
+        if (overrideStore != null) {
+            overrideStore.save(); // async writes scheduled during shutdown may never run
         }
     }
 }

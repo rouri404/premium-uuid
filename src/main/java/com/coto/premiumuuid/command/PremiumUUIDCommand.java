@@ -19,6 +19,7 @@ import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Executor;
 
 public final class PremiumUUIDCommand implements TabExecutor {
 
@@ -28,11 +29,13 @@ public final class PremiumUUIDCommand implements TabExecutor {
     private final PluginConfig config;
     private final UUIDCache cache;
     private final OverrideStore overrides;
+    private final Executor ioExecutor;
 
-    public PremiumUUIDCommand(PluginConfig config, UUIDCache cache, OverrideStore overrides) {
+    public PremiumUUIDCommand(PluginConfig config, UUIDCache cache, OverrideStore overrides, Executor ioExecutor) {
         this.config = config;
         this.cache = cache;
         this.overrides = overrides;
+        this.ioExecutor = ioExecutor;
     }
 
     @Override
@@ -58,8 +61,12 @@ public final class PremiumUUIDCommand implements TabExecutor {
     }
 
     private boolean handleReload(CommandSender sender) {
-        config.reload();
+        boolean cacheFileChanged = config.reload();
         sender.sendMessage(Component.text("PremiumUUID config reloaded.", NamedTextColor.GREEN));
+        if (cacheFileChanged) {
+            sender.sendMessage(Component.text("'cache.file' changed; it only takes effect after a server restart.",
+                    NamedTextColor.YELLOW));
+        }
         return true;
     }
 
@@ -109,14 +116,14 @@ public final class PremiumUUIDCommand implements TabExecutor {
         if (args.length >= 2) {
             String target = args[1].toLowerCase();
             if (cache.remove(target)) {
-                cache.save();
+                ioExecutor.execute(cache::saveIfDirty);
                 sender.sendMessage(Component.text("Cache cleared for '" + args[1] + "'.", NamedTextColor.GREEN));
             } else {
                 sender.sendMessage(Component.text("No cache entry for '" + args[1] + "'.", NamedTextColor.YELLOW));
             }
         } else {
             cache.clear();
-            cache.save();
+            ioExecutor.execute(cache::saveIfDirty);
             sender.sendMessage(Component.text("Entire UUID cache cleared.", NamedTextColor.GREEN));
         }
         return true;
